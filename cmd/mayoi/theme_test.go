@@ -3,6 +3,7 @@ package main
 import (
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -130,6 +131,29 @@ func TestGTAVITheme(t *testing.T) {
 	if hs.a.pal != gtaVIPal || hs.a.rain.moving {
 		t.Error("a light window is not in GTA VI, without rain")
 	}
+}
+
+// Solarized Light is light whatever the window's appearance, and shows
+// the same palette either way.
+func TestSolarizedLightTheme(t *testing.T) {
+	if paletteFor(themeSolarizedLight, false) != solarizedLightPal || paletteFor(themeSolarizedLight, true) != solarizedLightPal {
+		t.Error("Solarized Light follows the window's light or dark")
+	}
+	if themeSource(themeSolarizedLight, "dark") != mygo.ThemeLight {
+		t.Error("the native window is not light under Solarized Light")
+	}
+	if fixedAppearance(themeSolarizedLight) != true || fixedAppearance("") != false {
+		t.Error("Solarized Light leaves the appearance to the settings")
+	}
+	hs := themeHarness(t, themeSolarizedLight, false)
+	if hs.a.pal != solarizedLightPal || hs.a.rain.moving {
+		t.Error("a light window is not in Solarized Light, without rain")
+	}
+	hs.shot("solarized-light")
+	hs.gitRepo()
+	hs.a.openPath(filepath.Join(hs.a.root, "main.go"), true)
+	hs.settle()
+	hs.shot("solarized-light-code")
 }
 
 // The rain falls while the window has the keyboard, and holds still

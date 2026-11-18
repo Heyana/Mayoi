@@ -934,6 +934,16 @@ func (msgs Messages) ThemeAboutQoder() string {
 	return Catalog.Format(msgs.locale, "themeAboutQoder", nil)
 }
 
+// ThemeAboutSolarized says "Solarized's cream, and its eight accents"
+// in the language the app shows.
+func ThemeAboutSolarized() string { return In(i18n.Locale()).ThemeAboutSolarized() }
+
+// ThemeAboutSolarized says "Solarized's cream, and its eight accents"
+// in the language of msgs.
+func (msgs Messages) ThemeAboutSolarized() string {
+	return Catalog.Format(msgs.locale, "themeAboutSolarized", nil)
+}
+
 // ThemeAlwaysDark says "Always dark"
 // in the language the app shows.
 func ThemeAlwaysDark() string { return In(i18n.Locale()).ThemeAlwaysDark() }
@@ -942,6 +952,16 @@ func ThemeAlwaysDark() string { return In(i18n.Locale()).ThemeAlwaysDark() }
 // in the language of msgs.
 func (msgs Messages) ThemeAlwaysDark() string {
 	return Catalog.Format(msgs.locale, "themeAlwaysDark", nil)
+}
+
+// ThemeAlwaysLight says "Always light"
+// in the language the app shows.
+func ThemeAlwaysLight() string { return In(i18n.Locale()).ThemeAlwaysLight() }
+
+// ThemeAlwaysLight says "Always light"
+// in the language of msgs.
+func (msgs Messages) ThemeAlwaysLight() string {
+	return Catalog.Format(msgs.locale, "themeAlwaysLight", nil)
 }
 
 // ThemeAppearance says "appearance"

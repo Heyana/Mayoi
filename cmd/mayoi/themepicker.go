@@ -31,6 +31,7 @@ var builtinThemes = []themeChoice{
 	{themeWitchsBrew, locales.CmdViewThemeWitchsBrew, locales.ThemeAboutWitchsBrew},
 	{themeBloodMoon, locales.CmdViewThemeBloodMoon, locales.ThemeAboutBloodMoon},
 	{themeGTAVI, func() string { return "GTA VI" }, locales.ThemeAboutGTAVI},
+	{themeSolarizedLight, func() string { return "Solarized Light" }, locales.ThemeAboutSolarized},
 }
 
 // themeAppearances are the appearances the box chooses between, as the
@@ -97,8 +98,12 @@ func (a *app) previewChoice(i int) {
 	a.previewTheme(allThemes()[tp.results[i].Index].id, a.settings.Appearance)
 }
 
-// switchAppearance moves the appearance by by along the box's switch.
+// switchAppearance moves the appearance by by along the box's switch,
+// which the themes of a fixed appearance have not.
 func (a *app) switchAppearance(by int) {
+	if fixedAppearance(a.settings.Theme) {
+		return
+	}
 	i := 0
 	for j, ap := range themeAppearances {
 		if ap == a.settings.Appearance {
@@ -212,7 +217,7 @@ func (a *app) themePickerView(c *ui.Context) {
 
 // appearanceSwitch is the switch of the appearance in the box's head:
 // the system's, light or dark. It greys out under the themes that are
-// always dark.
+// always dark or always light.
 func (a *app) appearanceSwitch(c *ui.Context) {
 	sel := 0
 	for i, ap := range themeAppearances {
@@ -224,8 +229,12 @@ func (a *app) appearanceSwitch(c *ui.Context) {
 	sw := ui.Segmented(c.Key("theme-appearance"), &sel,
 		locales.CmdViewAppearanceSystem(), locales.CmdViewAppearanceLight(), locales.CmdViewAppearanceDark()).
 		FontSize(12).Shrink(0).Label(locales.ThemeAppearance())
-	if alwaysDark(a.settings.Theme) {
-		sw.Disabled(true).Tooltip(locales.ThemeAlwaysDark())
+	if fixedAppearance(a.settings.Theme) {
+		why := locales.ThemeAlwaysDark()
+		if alwaysLight(a.settings.Theme) {
+			why = locales.ThemeAlwaysLight()
+		}
+		sw.Disabled(true).Tooltip(why)
 	}
 	if sel != was {
 		a.previewTheme(a.settings.Theme, themeAppearances[sel])

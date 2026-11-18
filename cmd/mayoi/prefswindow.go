@@ -794,7 +794,7 @@ func (w *prefsWindow) control(c *ui.Context, f settings.Field, raw json.RawMessa
 			chosen = v
 			labels = append(labels, v)
 		}
-		disabled := f.Key == "appearance" && alwaysDark(w.m.s.Theme)
+		disabled := f.Key == "appearance" && fixedAppearance(w.m.s.Theme)
 		if segmentedFits(labels) {
 			if i, ok := w.segmented(c, "prefs-control-"+f.Key, slices.Index(labels, chosen), labels, prefTitle(f.Key), disabled); ok && i < len(f.Options) {
 				apply(f.Options[i])

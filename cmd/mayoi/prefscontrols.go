@@ -64,7 +64,7 @@ func (w *prefsWindow) themeTiles(c *ui.Context, chosen string, apply func(any)) 
 			case hovered:
 				pose.Y = -2
 			}
-			q := paletteFor(t.id, dark || alwaysDark(t.id))
+			q := paletteFor(t.id, alwaysDark(t.id) || dark && !alwaysLight(t.id))
 			m := themeMascotOf(t.id)
 			tile.Children(func() {
 				frame := ui.Box(c.Key("frame")).Size(themeTileW, themeTileH).Shrink(0)

@@ -534,11 +534,11 @@ func (a *app) menu(cli bool, run func(id string, win *mygo.Window)) *mygo.Menu {
 		it.Type, it.Checked = mygo.MenuItemRadio, checked
 		return it
 	}
-	// The appearances, which the themes that are always dark have no
-	// choice of, and the themes.
+	// The appearances, which the themes that are always dark or always
+	// light have no choice of, and the themes.
 	appearance := func(id, ap string) *mygo.MenuItem {
 		it := radio(id, a.settings.Appearance == ap)
-		it.Disabled = alwaysDark(a.settings.Theme)
+		it.Disabled = fixedAppearance(a.settings.Theme)
 		return it
 	}
 	theme := func(id, th string) *mygo.MenuItem { return radio(id, a.settings.Theme == th) }

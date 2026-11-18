@@ -9,6 +9,7 @@ needs a `## <version>` section here, or its build fails.
 - Commits chosen together show the files they changed in one diff, each with its +/−.
 - The panel of a commit's files shows each file's +/− beside its letter.
 - A commit's diff beside its files shows the file chosen in the panel, alone.
+- Solarized Light, Ethan Schoonover's cream and its eight accents, as a theme.
 - The Markdown Reading view shows an HTML `<table>` as a table, with its cells' alignment and pictures.
 - HTML `<ul>`, `<ol>` and `<li>` show as lists in the Reading view, nested and numbered.
 - A `<details>` folds under its `<summary>` in the Reading view; click the summary to open it.

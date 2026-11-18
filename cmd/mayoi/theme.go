@@ -248,6 +248,80 @@ func lightPalette() *palette {
 	return p
 }
 
+// solarizedLightPalette is Solarized's light scheme, by Ethan Schoonover:
+// the cream of base3 for the code, base2 for the chrome, and its eight
+// accents for the syntax: green keywords, cyan strings, yellow types, blue
+// functions, violet constants, orange numbers, and base1 comments.
+func solarizedLightPalette() *palette {
+	p := &palette{
+		editor:    ui.Hex("#fdf6e3"),
+		chrome:    ui.Hex("#eee8d5"),
+		panel:     ui.Hex("#f7f1df"),
+		border:    ui.Hex("#ddd6c1"),
+		hover:     ui.RGBA(0, 0, 0, 0.04),
+		active:    ui.RGBA(38, 139, 210, 0.14),
+		text:      ui.Hex("#657b83"),
+		muted:     ui.Hex("#839496"),
+		faint:     ui.Hex("#93a1a1"),
+		accent:    ui.Hex("#268bd2"),
+		accentDim: ui.RGBA(38, 139, 210, 0.5),
+		line:      ui.RGBA(0, 0, 0, 0.04),
+		selection: ui.RGBA(38, 139, 210, 0.18),
+		gutter:    ui.Hex("#93a1a1"),
+		gutterNow: ui.Hex("#586e75"),
+		status:    ui.Hex("#eee8d5"),
+		statusFg:  ui.Hex("#657b83"),
+		modified:  ui.Hex("#b58900"),
+		danger:    ui.Hex("#dc322f"),
+		match:     ui.RGBA(181, 137, 0, 0.22),
+		matchNow:  ui.RGBA(181, 137, 0, 0.42),
+		matchRing: ui.RGBA(181, 137, 0, 0.9),
+		guide:     ui.RGBA(101, 123, 131, 0.12),
+		guideNow:  ui.RGBA(101, 123, 131, 0.35),
+		bracket:   ui.RGBA(101, 123, 131, 0.35),
+		word:      ui.RGBA(101, 123, 131, 0.10),
+		shadow:    ui.RGBA(0, 0, 0, 0.10),
+		added:     ui.Hex("#859900"),
+		changed:   ui.Hex("#268bd2"),
+		removed:   ui.Hex("#dc322f"),
+		// The blue, with base3 on it, as Solarized writes a button.
+		fill:           ui.Hex("#268bd2"),
+		fillText:       ui.Hex("#fdf6e3"),
+		dangerFill:     ui.Hex("#dc322f"),
+		dangerText:     ui.Hex("#fdf6e3"),
+		surface:        ui.Hex("#fefaf0"),
+		surfaceHover:   ui.Hex("#f3eddc"),
+		surfacePressed: ui.Hex("#eae3cc"),
+		scrollbar:      ui.RGBA(101, 123, 131, 0.35),
+		ansi: [16]ui.Color{
+			ui.Hex("#073642"), ui.Hex("#dc322f"), ui.Hex("#859900"), ui.Hex("#b58900"),
+			ui.Hex("#268bd2"), ui.Hex("#d33682"), ui.Hex("#2aa198"), ui.Hex("#eee8d5"),
+			ui.Hex("#002b36"), ui.Hex("#cb4b16"), ui.Hex("#586e75"), ui.Hex("#657b83"),
+			ui.Hex("#839496"), ui.Hex("#6c71c4"), ui.Hex("#93a1a1"), ui.Hex("#fdf6e3"),
+		},
+	}
+	p.fillHover, p.fillPressed = p.fill.Mix(black, 0.1), p.fill.Mix(black, 0.22)
+	s := &p.syntax
+	s[highlight.Plain] = p.text
+	s[highlight.Keyword] = ui.Hex("#859900")
+	s[highlight.Type] = ui.Hex("#b58900")
+	s[highlight.Function] = ui.Hex("#268bd2")
+	s[highlight.String] = ui.Hex("#2aa198")
+	s[highlight.Number] = ui.Hex("#cb4b16")
+	s[highlight.Comment] = ui.Hex("#93a1a1")
+	s[highlight.Operator] = ui.Hex("#839496")
+	s[highlight.Punctuation] = ui.Hex("#657b83")
+	s[highlight.Constant] = ui.Hex("#6c71c4")
+	s[highlight.Builtin] = ui.Hex("#b58900")
+	s[highlight.Tag] = ui.Hex("#268bd2")
+	s[highlight.Attribute] = ui.Hex("#b58900")
+	s[highlight.Variable] = ui.Hex("#657b83")
+	s[highlight.Heading] = ui.Hex("#268bd2")
+	s[highlight.Deleted] = ui.Hex("#dc322f")
+	s[highlight.Inserted] = ui.Hex("#859900")
+	return p
+}
+
 // matrixPalette is The Matrix in its two worlds: the chrome in the
 // gunmetal of the real one, and the code in the Matrix's greens, told
 // apart by their hues. Comments are people's notes, so they take the
@@ -1376,6 +1450,8 @@ var (
 	darkPal   = darkPalette().derive()
 	matrixPal = matrixPalette().derive()
 
+	solarizedLightPal = solarizedLightPalette().derive()
+
 	claudeLightPal = claudeLightPalette().derive()
 	claudeDarkPal  = claudeDarkPalette().derive()
 
@@ -1412,6 +1488,9 @@ const (
 	themeWitchsBrew = "witchsbrew"
 	themeBloodMoon  = "bloodmoon"
 	themeGTAVI      = "gtavi"
+	// themeSolarizedLight is Solarized's light scheme, which is light
+	// whatever the Appearance is.
+	themeSolarizedLight = "solarizedlight"
 )
 
 // alwaysDark is whether a theme is dark whatever the Appearance is.
@@ -1425,6 +1504,16 @@ func alwaysDark(theme string) bool {
 	}
 	return false
 }
+
+// alwaysLight is whether a theme is light whatever the Appearance is, as
+// Solarized's light scheme, which has no dark side here.
+func alwaysLight(theme string) bool {
+	return theme == themeSolarizedLight
+}
+
+// fixedAppearance is whether a theme's appearance is its own rather than
+// the settings', as the themes always dark and always light.
+func fixedAppearance(theme string) bool { return alwaysDark(theme) || alwaysLight(theme) }
 
 // paletteFor returns the palette of a theme of the settings, in a window
 // that is dark or not.
@@ -1461,6 +1550,8 @@ func paletteFor(theme string, dark bool) *palette {
 		return bloodMoonPal
 	case theme == themeGTAVI:
 		return gtaVIPal
+	case theme == themeSolarizedLight:
+		return solarizedLightPal
 	case dark:
 		return darkPal
 	}
@@ -1474,6 +1565,9 @@ func paletteFor(theme string, dark bool) *palette {
 func themeSource(theme, appearance string) mygo.ThemeSource {
 	if alwaysDark(theme) {
 		return mygo.ThemeDark
+	}
+	if alwaysLight(theme) {
+		return mygo.ThemeLight
 	}
 	return mygo.ThemeSource(appearance)
 }
