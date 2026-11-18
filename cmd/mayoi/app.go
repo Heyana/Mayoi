@@ -165,8 +165,11 @@ type app struct {
 	pal *palette
 	// fade is the window's way from one palette to another, as the
 	// theme or the appearance changes.
-	fade     paletteFade
-	font     codeFont
+	fade paletteFade
+	font codeFont
+	// diffFont is the font a diff draws its lines in: the code font, a
+	// size below the editor's.
+	diffFont codeFont
 	services ui.Services
 	// diffScratch is what painting the lines of a diff fills, kept from
 	// line to line.

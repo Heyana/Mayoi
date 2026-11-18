@@ -1335,14 +1335,14 @@ func (a *app) splits(v *diffView, viewW float32) bool {
 		return false
 	}
 	l := a.diffGeometry(v, true, viewW)
-	return float32(int(viewW/2))-l.textX >= splitWidth*a.font.charW
+	return float32(int(viewW/2))-l.textX >= splitWidth*a.diffFont.charW
 }
 
 // layoutRows lays out the rows of a diff again when what they show, or
 // how, changed, keeping the row at the top of the view where it was, or
 // scrolling to the file to reveal once it is listed.
 func (a *app) layoutRows(v *diffView, l diffGeometry) {
-	b := diffBuild{gen: v.gen, split: v.split, wrap: a.wrapsDiff(v), full: v.full, aligned: a.settings.DiffAlignedRows, context: a.diffContextOf(), whitespace: a.diffWhitespaceOf(), font: a.font}
+	b := diffBuild{gen: v.gen, split: v.split, wrap: a.wrapsDiff(v), full: v.full, aligned: a.settings.DiffAlignedRows, context: a.diffContextOf(), whitespace: a.diffWhitespaceOf(), font: a.diffFont}
 	b.one = a.oneFileOf(v)
 	if v.shown != nil {
 		b.shown = *v.shown
@@ -1363,7 +1363,7 @@ func (a *app) layoutRows(v *diffView, l diffGeometry) {
 	if b == v.built && v.tops != nil {
 		return
 	}
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	anchor, offset := diffAnchor{}, float32(0)
 	// The row chosen holds its place while in view, or else the top row.
 	top := v.focusRowAt(v.topRow(lineH))
@@ -1872,7 +1872,7 @@ func (a *app) rightShift(v *diffView) float32 {
 // its content, and how tall they are: in the side's own stream when the
 // rows do not align, and lower or higher on the right as it is scrolled.
 func (a *app) sideRowY(v *diffView, side, i int) (y, h float32) {
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	if a.streams(v) {
 		t := v.sideTops[side]
 		y, h = editorPadY+float32(t[i])*lineH, float32(t[i+1]-t[i])*lineH
@@ -1892,7 +1892,7 @@ func (a *app) runClip(v *diffView, i int, r ui.Rect) ui.Rect {
 	if !a.streams(v) || i < 0 || i >= len(v.runs) {
 		return r
 	}
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	top := editorPadY + float32(v.runs[i][0])*lineH
 	bot := editorPadY + float32(v.runs[i][1])*lineH
 	y0, y1 := max(r.Y, top), min(r.Y+r.H, bot)
@@ -2264,7 +2264,7 @@ func (a *app) activateRow(v *diffView, i int, open bool) {
 		if !f.folded {
 			// The lines fold away under the view: it comes back to them
 			// when the file unfolds.
-			if at := v.focusRowAt(v.topRow(a.font.lineH)); at >= 0 && v.tops != nil && v.rows[at].file == r.file {
+			if at := v.focusRowAt(v.topRow(a.diffFont.lineH)); at >= 0 && v.tops != nil && v.rows[at].file == r.file {
 				p := v.anchorOf(at)
 				v.place = &p
 			}
@@ -2430,7 +2430,7 @@ func (a *app) diffInput(v *diffView, ev ui.InputEvent) bool {
 		return false
 	}
 	shift := ev.Mods&ui.Shift != 0
-	page := max(v.viewH-a.font.lineH, a.font.lineH)
+	page := max(v.viewH-a.diffFont.lineH, a.diffFont.lineH)
 	switch ev.Key {
 	case ui.KeyJ, ui.KeyDown:
 		if shift {
@@ -2518,7 +2518,7 @@ func (a *app) diffInput(v *diffView, ev ui.InputEvent) bool {
 
 // pageDiff scrolls a diff by dy, and keeps the chosen row in view.
 func (a *app) pageDiff(v *diffView, dy float32) {
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	contentH := 2*editorPadY + float32(v.tops[len(v.tops)-1])*lineH
 	v.scroll.Y = clamp(v.scroll.Y+dy, 0, max(0, contentH-v.viewH))
 	if v.cursor < 0 {
@@ -2881,7 +2881,7 @@ func (a *app) resyncDiff(v *diffView, on bool) {
 	// The row at the top of the right side comes to the top, across from
 	// its counterpart.
 	if len(v.rows) > 0 {
-		if i := v.rowAt(v.sideY+a.font.lineH/2, a.font.lineH); i >= 0 {
+		if i := v.rowAt(v.sideY+a.diffFont.lineH/2, a.diffFont.lineH); i >= 0 {
 			v.jumpRow(i, jumpTop)
 		}
 	}
@@ -2899,7 +2899,7 @@ func (a *app) toggleDiffWrap(v *diffView) {
 // keepTopRow changes how a diff lays out its rows, keeping the line at
 // the top of its view, or the chosen one, where it was.
 func (a *app) keepTopRow(v *diffView, change func()) {
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	chosen := v.cursor
 	at := v.focusRowAt(v.focusRow())
 	ok := at >= 0 && v.tops != nil

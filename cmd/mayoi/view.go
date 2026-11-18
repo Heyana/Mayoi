@@ -48,6 +48,11 @@ func (a *app) view(c *ui.Context) {
 	if p := a.settings.Prefs; !a.font.is(p) {
 		a.font = newCodeFont(p)
 	}
+	// A diff draws its lines below the editor's size and tighter, so they
+	// stand beside the text of the lists they are read with.
+	if p := diffPrefs(a.settings.Prefs); !a.diffFont.is(p) {
+		a.diffFont = newCodeFont(p)
+	}
 	if !a.started {
 		// Before what was posted meanwhile, as opening the file the app was
 		// started with: it opens in the columns of the last session.

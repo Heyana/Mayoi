@@ -955,7 +955,7 @@ func (a *gitContext) scmHeader(c *ui.Context, r scmRow, action *func()) {
 	clicked := row.Clicked()
 	row.Children(func() {
 		chevron(c, !a.scm.collapsed[r.group]).FontSize(12).TextColor(p.muted)
-		size, spacing := p.titleLook(11, 0.4)
+		size, spacing := p.titleLook(12, 0.4)
 		ui.Text(c, p.title(groupName(r.group))).FontSize(size).FontWeight(600).LetterSpacing(spacing).
 			TextColor(p.muted).SingleLine().Shrink(1)
 		ui.Spacer(c)
@@ -1016,14 +1016,14 @@ func (a *gitContext) scmHeader(c *ui.Context, r scmRow, action *func()) {
 		if st := a.groupStat(r.group); st.Added > 0 || st.Deleted > 0 {
 			// The lines the files of the group gained and lost together.
 			if st.Added > 0 {
-				ui.Text(c, fmt.Sprintf("+%d", st.Added)).FontSize(10.5).FontWeight(500).TextColor(p.added).Shrink(0)
+				ui.Text(c, fmt.Sprintf("+%d", st.Added)).FontSize(11.5).FontWeight(500).TextColor(p.added).Shrink(0)
 			}
 			if st.Deleted > 0 {
-				ui.Text(c, fmt.Sprintf("−%d", st.Deleted)).FontSize(10.5).FontWeight(500).TextColor(p.removed).
+				ui.Text(c, fmt.Sprintf("−%d", st.Deleted)).FontSize(11.5).FontWeight(500).TextColor(p.removed).
 					Shrink(0).Padding(0, 0, 0, 4)
 			}
 		}
-		ui.Text(c, fmt.Sprint(r.count)).FontSize(10.5).TextColor(p.muted).Padding(0, 5).Radius(8).Background(p.hover).
+		ui.Text(c, fmt.Sprint(r.count)).FontSize(11.5).TextColor(p.muted).Padding(0, 5).Radius(8).Background(p.hover).
 			ContentTransition(ui.ContentTransition{Numeric: true})
 	})
 	if clicked && *action == nil {
@@ -1086,7 +1086,7 @@ func (a *gitContext) scmFile(c *ui.Context, r scmRow, action *func()) {
 		name := filepath.Base(e.Path)
 		icon, col := entryIcon(p, e, name)
 		ui.Icon(c, icon).FontSize(14).TextColor(col)
-		label := ui.Text(c, name).FontSize(13).SingleLine().Shrink(0).TextColor(gitColor(p, letter))
+		label := ui.Text(c, name).FontSize(13.5).SingleLine().Shrink(0).TextColor(gitColor(p, letter))
 		if letter == 'D' {
 			label.Strikethrough()
 		}
@@ -1098,7 +1098,7 @@ func (a *gitContext) scmFile(c *ui.Context, r scmRow, action *func()) {
 			dir = path.Dir(rel)
 		}
 		if dir != "." && !tree {
-			ui.Text(c, dir).FontSize(11.5).TextColor(p.faint).SingleLine().Shrink(1)
+			ui.Text(c, dir).FontSize(12).TextColor(p.faint).SingleLine().Shrink(1)
 		}
 		if e.Submodule() {
 			state := locales.ScmSubmoduleContentLabel()
@@ -1136,15 +1136,15 @@ func (a *gitContext) scmFile(c *ui.Context, r scmRow, action *func()) {
 		if st, ok := a.git.workStat[e.Path]; ok {
 			// The lines a file gained and lost, before its letter.
 			if st.Added > 0 {
-				ui.Text(c, fmt.Sprintf("+%d", st.Added)).FontSize(10.5).FontWeight(500).TextColor(p.added).
+				ui.Text(c, fmt.Sprintf("+%d", st.Added)).FontSize(11.5).FontWeight(500).TextColor(p.added).
 					Shrink(0).Padding(0, 0, 0, 4)
 			}
 			if st.Deleted > 0 {
-				ui.Text(c, fmt.Sprintf("−%d", st.Deleted)).FontSize(10.5).FontWeight(500).TextColor(p.removed).
+				ui.Text(c, fmt.Sprintf("−%d", st.Deleted)).FontSize(11.5).FontWeight(500).TextColor(p.removed).
 					Shrink(0).Padding(0, 0, 0, 2)
 			}
 		}
-		ui.Text(c, string(letter)).FontSize(11).FontWeight(600).Font(a.app.font.family).Padding(0, 4, 0, 2).
+		ui.Text(c, string(letter)).FontSize(11.5).FontWeight(600).Font(a.app.font.family).Padding(0, 4, 0, 2).
 			TextColor(gitColor(p, letter)).Shrink(0)
 	})
 	if clicked && *action == nil {
@@ -1385,7 +1385,7 @@ func (a *gitContext) scmCommit(c *ui.Context, r scmRow, action *func()) {
 		shown, badgeW := a.app.badgeRoom(n, indent-6, lead)
 		for i := range n {
 			if i == shown && n > shown {
-				ui.Text(c, fmt.Sprintf("+%d", n-i)).FontSize(10.5).TextColor(p.muted).Padding(0, 4).
+				ui.Text(c, fmt.Sprintf("+%d", n-i)).FontSize(11).TextColor(p.muted).Padding(0, 4).
 					Height(16).Radius(4).Background(p.hover).Shrink(0)
 				break
 			}
@@ -1402,7 +1402,7 @@ func (a *gitContext) scmCommit(c *ui.Context, r scmRow, action *func()) {
 		case !unpushed && !head:
 			col = mix(p.text, p.muted, 0.35)
 		}
-		ui.Text(c, cm.Subject).FontSize(12.5).TextColor(col).SingleLine().Shrink(1).MinWidth(24)
+		ui.Text(c, cm.Subject).FontSize(13.5).TextColor(col).SingleLine().Shrink(1).MinWidth(24)
 		ui.Spacer(c)
 		if unpushed {
 			ui.Icon(c, iconArrowUp).FontSize(11).TextColor(p.accent).Shrink(0)
@@ -1420,11 +1420,11 @@ func (a *gitContext) scmCommit(c *ui.Context, r scmRow, action *func()) {
 				if read.stat.Deleted == 0 {
 					delCol = p.faint
 				}
-				ui.Text(c, fmt.Sprintf("+%d", read.stat.Added)).FontSize(10.5).TextColor(addCol).Shrink(0)
-				ui.Text(c, fmt.Sprintf("−%d", read.stat.Deleted)).FontSize(10.5).TextColor(delCol).Shrink(0)
+				ui.Text(c, fmt.Sprintf("+%d", read.stat.Added)).FontSize(11.5).TextColor(addCol).Shrink(0)
+				ui.Text(c, fmt.Sprintf("−%d", read.stat.Deleted)).FontSize(11.5).TextColor(delCol).Shrink(0)
 			}
 		}
-		ui.Text(c, shortAgo(cm.Time, time.Now())).FontSize(11).TextColor(p.faint).Shrink(0).Padding(0, 2, 0, 0)
+		ui.Text(c, shortAgo(cm.Time, time.Now())).FontSize(12).TextColor(p.faint).Shrink(0).Padding(0, 2, 0, 0)
 	})
 	if clicked && *action == nil {
 		mods := row.ClickModifiers()
@@ -2407,7 +2407,7 @@ func (a *gitContext) scmShapeW() float32 {
 // scmCount is how many there are, beside the name of a button: the
 // branches of the repository, or its worktrees.
 func scmCount(c *ui.Context, p *palette, n int) {
-	ui.Text(c, fmt.Sprint(n)).FontSize(10.5).FontWeight(600).TextColor(p.text).
+	ui.Text(c, fmt.Sprint(n)).FontSize(11.5).FontWeight(600).TextColor(p.text).
 		Padding(0, 5).Radius(8).Background(p.surface).Shrink(0)
 }
 
@@ -2480,7 +2480,7 @@ func (a *gitContext) scmBranchButton(c *ui.Context, compact bool) {
 	}
 	b := ui.ButtonBase(c.Key("scm-branch")).Height(24).Padding(0, 6).Gap(5).Radius(5).AlignItems(ui.Center).
 		Shrink(1).Label(locales.BranchLabel(branch)).Tooltip(locales.CmdGitSwitchBranch()).Disabled(!a.git.canMutate())
-	size := float32(12.5)
+	size := float32(13)
 	if compact {
 		b.MaxWidth(100).Shrink(2)
 		size = 11

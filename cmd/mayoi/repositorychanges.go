@@ -20,7 +20,7 @@ const (
 
 const (
 	repositoryHeaderHeight = float32(28)
-	scmRowHeight           = float32(22)
+	scmRowHeight           = float32(24)
 )
 
 // A shared list owns scrolling; each row retains its repository's selection,

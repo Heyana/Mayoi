@@ -51,7 +51,7 @@ func (l diffGeometry) onRight(x float32) bool { return x >= l.half+l.mid/2 }
 
 // diffGutter is the room of the line numbers of n lines in a diff.
 func (a *app) diffGutter(n int) float32 {
-	return float32(max(len(strconv.Itoa(n)), 3))*a.font.charW + 16
+	return float32(max(len(strconv.Itoa(n)), 3))*a.diffFont.charW + 16
 }
 
 func (a *app) diffGeometry(v *diffView, split bool, viewW float32) diffGeometry {
@@ -61,7 +61,7 @@ func (a *app) diffGeometry(v *diffView, split bool, viewW float32) diffGeometry 
 	}
 	numW := a.diffGutter(n)
 	l := diffGeometry{numW: numW, viewW: viewW}
-	room := func(w float32) int { return max(int((w-l.textX-14)/a.font.charW), 8) }
+	room := func(w float32) int { return max(int((w-l.textX-14)/a.diffFont.charW), 8) }
 	if split {
 		l.mid = diffMidW
 		l.half = float32(int((viewW - l.mid) / 2))
@@ -85,9 +85,9 @@ func (a *app) rowUnder(v *diffView, x, y float32, l diffGeometry) int {
 	if a.streams(v) {
 		// The sides stand in streams of their own: the half the pointer
 		// is on finds the row in its stream.
-		return v.rowAtStream(v.sideTops[btoi(right)], y, a.font.lineH)
+		return v.rowAtStream(v.sideTops[btoi(right)], y, a.diffFont.lineH)
 	}
-	return v.rowAt(y, a.font.lineH)
+	return v.rowAt(y, a.diffFont.lineH)
 }
 
 // diffPaneUI shows a diff: its rows painted in a pane that scrolls both
@@ -95,7 +95,7 @@ func (a *app) rowUnder(v *diffView, x, y float32, l diffGeometry) int {
 // While its writable side is edited, the edits run first, as a frame is
 // built.
 func (a *app) diffPaneUI(c *ui.Context, v *diffView) {
-	p, f := a.pal, a.font
+	p, f := a.pal, a.diffFont
 	a.refreshDiff(v)
 	a.runDiffEdits(v, v.pane.FocusWithin(c))
 	message := func(msg string) {
@@ -795,7 +795,7 @@ func (a *app) fileHeaderRight(f *diffFile) float32 {
 		return right
 	}
 	add, del := f.counts()
-	return right + float32(len([]rune(fmt.Sprintf("+%d −%d", add, del))))*a.font.charW + 10 + diffStatBlocks*8
+	return right + float32(len([]rune(fmt.Sprintf("+%d −%d", add, del))))*a.diffFont.charW + 10 + diffStatBlocks*8
 }
 
 // viewedMarks are the boxes of the headers in view of the files of a pull
@@ -807,7 +807,7 @@ func (a *app) viewedMarks(c *ui.Context, v *diffView, first, last, sticky int, s
 	if pr == nil || pr.pr == nil {
 		return nil
 	}
-	p, lineH := a.pal, a.font.lineH
+	p, lineH := a.pal, a.diffFont.lineH
 	label := locales.PrViewed()
 	tw, _ := c.MeasureText(0, ui.Span{Text: label, Size: 11.5})
 	// The box, its label and its padding, and the gap before the counts.
@@ -1131,7 +1131,7 @@ func (a *app) layOutCommitCard(c *ui.Context, v *diffView, w float32) *commitCar
 		}}
 	}
 	hashChip := func(h string, dot bool) cardPiece {
-		hash := ui.Span{Text: git.ShortHash(h), Font: a.font.family, Size: a.font.size - 1, Color: p.accent}
+		hash := ui.Span{Text: git.ShortHash(h), Font: a.diffFont.family, Size: a.diffFont.size - 1, Color: p.accent}
 		return cardPiece{w: measure(hash) + 12, dot: dot, show: func() {
 			b := ui.ButtonBase(c.Key("card-hash:"+h)).Height(18).Padding(0, 6).Radius(5).AlignItems(ui.Center).
 				Background(p.accent.Alpha(0.1)).Label(locales.CopyCommitHash()).Tooltip(locales.CopyCommitHash())
@@ -1286,7 +1286,7 @@ func (a *app) finishCommitCard(c *ui.Context, v *diffView, k *commitCard, w floa
 		body = withoutCoAuthorLines(body)
 	}
 	if body = strings.TrimRight(body, "\n"); body != "" {
-		k.body = ui.Span{Text: body, Font: a.font.family, Size: a.font.size - 1, Color: p.muted}
+		k.body = ui.Span{Text: body, Font: a.diffFont.family, Size: a.diffFont.size - 1, Color: p.muted}
 		_, k.bodyH = c.MeasureText(w, k.body)
 		if one := lineOf(k.body); k.bodyH > maxCardBody*one+0.5 {
 			k.folds = true
@@ -1297,7 +1297,7 @@ func (a *app) finishCommitCard(c *ui.Context, v *diffView, k *commitCard, w floa
 		}
 		h += cardBodyGap + k.bodyH
 	}
-	k.lines = max(int(math.Ceil(float64(h/a.font.lineH))), 3)
+	k.lines = max(int(math.Ceil(float64(h/a.diffFont.lineH))), 3)
 	return k
 }
 
@@ -1601,8 +1601,8 @@ func (a *app) paintDiffGlow(pt *ui.Painter, v *diffView, l diffGeometry, r ui.Re
 				if row.new < 0 {
 					tint = p.removed
 				}
-				y := r.Y + editorPadY + float32(v.tops[i])*a.font.lineH
-				pt.Fill(ui.Rect{X: vx, Y: y, W: view.W, H: float32(row.h) * a.font.lineH}, tint.Alpha(0.15*g), 0)
+				y := r.Y + editorPadY + float32(v.tops[i])*a.diffFont.lineH
+				pt.Fill(ui.Rect{X: vx, Y: y, W: view.W, H: float32(row.h) * a.diffFont.lineH}, tint.Alpha(0.15*g), 0)
 				continue
 			}
 			for side, n := range [2]int{row.old, row.new} {
@@ -1662,8 +1662,8 @@ func (a *app) paintDiffFlash(pt *ui.Painter, v *diffView, l diffGeometry, r ui.R
 			continue
 		}
 		if !v.split {
-			y := r.Y + editorPadY + float32(v.tops[i])*a.font.lineH
-			pt.Fill(ui.Rect{X: vx, Y: y, W: view.W, H: float32(row.h) * a.font.lineH}, col, 0)
+			y := r.Y + editorPadY + float32(v.tops[i])*a.diffFont.lineH
+			pt.Fill(ui.Rect{X: vx, Y: y, W: view.W, H: float32(row.h) * a.diffFont.lineH}, col, 0)
 			continue
 		}
 		y, h := a.sideRowY(v, fl.side, i)
@@ -1721,7 +1721,7 @@ func diffSpans(file *diffFile, newSide bool, n, peer int, h diffHighlight) []lin
 // words that changed from the line peer of the other side, then its text
 // in the colors of its tokens, on rows cols wide as it wraps.
 func (a *app) paintDiffLine(pt *ui.Painter, file *diffFile, newSide bool, n, peer int, x, y float32, tint ui.Color, cols int, wrap bool) {
-	f, p := a.font, a.pal
+	f, p := a.diffFont, a.pal
 	s := file.side(newSide)
 	if n < 0 || n >= len(s.lines) {
 		return
@@ -1887,8 +1887,8 @@ func (a *app) fileButtons(c *ui.Context, v *diffView, f *diffFile, right, y floa
 		return ui.Rect{}
 	}
 	w := float32(len(bs)) * 22
-	r := ui.Rect{X: right - a.fileHeaderRight(f) - 10 - w, Y: y, W: w, H: a.font.lineH}
-	ui.Row(c.Key("file-buttons")).Absolute().Left(r.X).Top(y + (a.font.lineH-20)/2).Gap(2).Children(func() {
+	r := ui.Rect{X: right - a.fileHeaderRight(f) - 10 - w, Y: y, W: w, H: a.diffFont.lineH}
+	ui.Row(c.Key("file-buttons")).Absolute().Left(r.X).Top(y + (a.diffFont.lineH-20)/2).Gap(2).Children(func() {
 		for _, b := range bs {
 			if a.smallButton(c, b.icon, b.label) {
 				a.post(b.fn)

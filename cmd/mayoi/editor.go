@@ -50,6 +50,19 @@ var tabCols atomic.Int32
 
 func init() { tabCols.Store(4) }
 
+// diffPrefs are the preferences of the font a diff draws its lines in: the
+// code font a size below the editor's, never below 12, and set so that a
+// line keeps the height the editor gives it: the text reads quieter, the
+// rhythm of the lines is the editor's.
+func diffPrefs(p settings.Prefs) settings.Prefs {
+	size := p.FontSize
+	p.FontSize = max(size-1, 12)
+	if size > 0 && p.FontSize != size {
+		p.LineHeight = p.LineHeight * size / p.FontSize
+	}
+	return p
+}
+
 // tabWidth is how many columns a tab takes.
 func tabWidth() int { return int(tabCols.Load()) }
 

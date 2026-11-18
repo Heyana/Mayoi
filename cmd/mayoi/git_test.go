@@ -979,7 +979,7 @@ func TestDiffScrollsToTheFileChosen(t *testing.T) {
 		t.Fatalf("cursor %d, want %d", v.cursor, at)
 	}
 	// In view: at the top, unless the end of the files was in view.
-	if top := editorPadY + float32(v.tops[at])*a.font.lineH; top < v.scroll.Y || top > v.scroll.Y+v.viewH {
+	if top := editorPadY + float32(v.tops[at])*a.diffFont.lineH; top < v.scroll.Y || top > v.scroll.Y+v.viewH {
 		t.Errorf("scrolled to %v, header at %v", v.scroll.Y, top)
 	}
 	// Only the files near the view were read.
@@ -1014,7 +1014,7 @@ func TestDiffScrollsToTheFileChosen(t *testing.T) {
 	// A file folded above the view keeps the rows in view where they were.
 	a.showChanges(diffTarget{path: hs.path("f10.txt"), base: diffIndex}, true)
 	hs.settleGit()
-	place := func() float32 { return editorPadY + float32(v.tops[v.cursor])*a.font.lineH - v.scroll.Y }
+	place := func() float32 { return editorPadY + float32(v.tops[v.cursor])*a.diffFont.lineH - v.scroll.Y }
 	was := place()
 	if was != 0 {
 		t.Errorf("f10 at %v", was)
@@ -1086,7 +1086,7 @@ func TestDiffFolds(t *testing.T) {
 	if pane, ok := hs.tt.Find("Diff of the Changes"); ok {
 		v.scroll.Y = 0
 		hs.settle()
-		hs.tt.ClickAt(pane.X+60, pane.Y+editorPadY+(float32(v.tops[2])+0.5)*a.font.lineH)
+		hs.tt.ClickAt(pane.X+60, pane.Y+editorPadY+(float32(v.tops[2])+0.5)*a.diffFont.lineH)
 		hs.settle()
 	}
 	if got := kinds(v); v.cursor < 0 || v.rows[v.cursor].gap != 0 || got != "SFH"+strings.Repeat("L", 58)+"G" {
@@ -1229,7 +1229,7 @@ func TestDiffOfEveryFile(t *testing.T) {
 		t.Fatal("no diff pane")
 	}
 	click := func(i int) {
-		hs.tt.ClickAt(pane.X+60, pane.Y+editorPadY+(float32(v.tops[i])+0.5)*a.font.lineH-v.scroll.Y)
+		hs.tt.ClickAt(pane.X+60, pane.Y+editorPadY+(float32(v.tops[i])+0.5)*a.diffFont.lineH-v.scroll.Y)
 		hs.settle()
 	}
 	v.scroll.Y = 0
@@ -1447,7 +1447,7 @@ func TestDiffStickyHeader(t *testing.T) {
 			head = h
 		}
 	}
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	// Scrolled into its lines, its header stays at the top.
 	v.scroll.Y = editorPadY + float32(v.tops[head]+10)*lineH
 	hs.settle()
@@ -2289,7 +2289,7 @@ func TestDiffSyncScroll(t *testing.T) {
 	// Whole files, so there is enough to scroll.
 	a.setDiffFull(v, true)
 	hs.settle()
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	v.scroll.Y = 5 * lineH
 	hs.settle()
 	// Each side on its own, from where they showed together.
@@ -2404,7 +2404,7 @@ func TestDiffKeepsItsPlace(t *testing.T) {
 	v := a.activeTab().diff
 	a.setDiffLayout(v, layoutSplit)
 	hs.settle()
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	at := func() diffAnchor { return v.anchorOf(v.focusRowAt(v.topRow(lineH))) }
 	// At the line that wraps.
 	a.setDiffFull(v, true)
@@ -2949,7 +2949,7 @@ func TestRevertArrowsOfTheDiff(t *testing.T) {
 	// removed block in view, the arrow of the added block goes back, and
 	// the removed one is still in view after the diff has been read again.
 	runs0 := hunkRuns(v, hs.path("t.txt"), diffIndex)
-	v.scroll.Y = editorPadY + float32(v.tops[runs0[2]])*a.font.lineH - 5*a.font.lineH
+	v.scroll.Y = editorPadY + float32(v.tops[runs0[2]])*a.diffFont.lineH - 5*a.diffFont.lineH
 	hs.settle()
 	apply(1, "added block")
 	want0 := strings.Replace(strings.Replace(orig, "line 25\n", "", 1), "line 2\n", "line two\n", 1)
@@ -2969,7 +2969,7 @@ func TestRevertArrowsOfTheDiff(t *testing.T) {
 			to = i + 1
 		}
 	}
-	first, last := v.rowAt(v.scroll.Y, a.font.lineH), v.rowAt(v.scroll.Y+v.viewH, a.font.lineH)
+	first, last := v.rowAt(v.scroll.Y, a.diffFont.lineH), v.rowAt(v.scroll.Y+v.viewH, a.diffFont.lineH)
 	if from > last || to-1 < first {
 		t.Errorf("the removed block went out of the view: rows %d..%d of %d..%d", from, to-1, first, last)
 	}

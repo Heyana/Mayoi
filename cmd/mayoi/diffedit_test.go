@@ -531,9 +531,9 @@ func TestDiffEditPlacesTheCaretByClicking(t *testing.T) {
 	if row < 0 {
 		t.Fatal("no row of line 25")
 	}
-	v.scroll.Y = max(0, editorPadY+float32(v.tops[row])*a.font.lineH-300)
+	v.scroll.Y = max(0, editorPadY+float32(v.tops[row])*a.diffFont.lineH-300)
 	hs.settle()
-	y := titleBarH + tabStripH + crumbsH + editorPadY + float32(v.tops[row])*a.font.lineH - v.scroll.Y + a.font.lineH/2
+	y := titleBarH + tabStripH + crumbsH + editorPadY + float32(v.tops[row])*a.diffFont.lineH - v.scroll.Y + a.diffFont.lineH/2
 	x := a.window.SidebarWidth + l.textX + 3*a.font.charW
 	hs.tt.ClickAt(x, y)
 	hs.settle()
@@ -544,7 +544,7 @@ func TestDiffEditPlacesTheCaretByClicking(t *testing.T) {
 	}
 	// A drag from there down selects the lines between: the press puts the
 	// caret where it is, at the character the click had found.
-	y2 := y + 2*a.font.lineH
+	y2 := y + 2*a.diffFont.lineH
 	hs.tt.Press(x, y)
 	hs.tt.Move(x, y2)
 	hs.tt.Release(x, y2)
@@ -967,7 +967,7 @@ func TestDiffUnalignedRowUnder(t *testing.T) {
 	if k < 0 {
 		t.Fatal("no added line")
 	}
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	// On the right half, at the height the right stream shows the added
 	// line, the row under the pointer is that line's.
 	y := editorPadY + float32(v.sideTops[1][k])*lineH + lineH/2
