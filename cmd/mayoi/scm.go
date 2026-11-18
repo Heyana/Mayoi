@@ -257,6 +257,19 @@ func (a *gitContext) scmRows() []scmRow {
 	return s.rows
 }
 
+// groupStat adds up the lines the files of a group gained and lost: those
+// of the changes, staged and not, and of the files Git does not track yet.
+func (a *gitContext) groupStat(g scmGroup) git.FileStat {
+	var st git.FileStat
+	for _, e := range a.groupEntries()[g] {
+		if s, ok := a.git.workStat[e.Path]; ok {
+			st.Added += s.Added
+			st.Deleted += s.Deleted
+		}
+	}
+	return st
+}
+
 // scmDir is a folder of the tree of a group's changes: its folders and
 // its files.
 type scmDir struct {
@@ -998,6 +1011,16 @@ func (a *gitContext) scmHeader(c *ui.Context, r scmRow, action *func()) {
 			b.Children(func() { ui.Icon(c, iconBranch).FontSize(13).TextColor(col) })
 			if b.Clicked() {
 				*action = a.toggleAllBranches
+			}
+		}
+		if st := a.groupStat(r.group); st.Added > 0 || st.Deleted > 0 {
+			// The lines the files of the group gained and lost together.
+			if st.Added > 0 {
+				ui.Text(c, fmt.Sprintf("+%d", st.Added)).FontSize(10.5).FontWeight(500).TextColor(p.added).Shrink(0)
+			}
+			if st.Deleted > 0 {
+				ui.Text(c, fmt.Sprintf("−%d", st.Deleted)).FontSize(10.5).FontWeight(500).TextColor(p.removed).
+					Shrink(0).Padding(0, 0, 0, 4)
 			}
 		}
 		ui.Text(c, fmt.Sprint(r.count)).FontSize(10.5).TextColor(p.muted).Padding(0, 5).Radius(8).Background(p.hover).

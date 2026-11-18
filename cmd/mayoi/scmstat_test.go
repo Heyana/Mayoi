@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"testing"
+
+	"mayoi/internal/git"
 )
 
 // The changes of the work tree show the lines each file gained and lost,
@@ -21,6 +23,20 @@ func TestScmShowsTheLinesChanged(t *testing.T) {
 		if want := fmt.Sprintf("+%d", st.Added); !hs.tt.HasText(want) {
 			t.Errorf("%s: %q is not shown in %q", name, want, hs.tt.Texts())
 		}
+	}
+	// The header of a group adds its files' lines up, beside their count.
+	g := a.repository()
+	var changes git.FileStat
+	for _, e := range g.groupEntries()[groupChanges] {
+		st := a.git.workStat[e.Path]
+		changes.Added += st.Added
+		changes.Deleted += st.Deleted
+	}
+	if got := g.groupStat(groupChanges); got != changes || changes.Added == 0 {
+		t.Fatalf("the changes add up to %+v, want %+v", got, changes)
+	}
+	if want := fmt.Sprintf("+%d", changes.Added); !hs.tt.HasText(want) {
+		t.Errorf("%q is not beside the count of the changes", want)
 	}
 	hs.shot("scm-lines")
 	// A file staged shows the lines it changed against HEAD too.

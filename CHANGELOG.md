@@ -12,6 +12,7 @@ needs a `## <version>` section here, or its build fails.
 - Solarized Light, Ethan Schoonover's cream and its eight accents, as a theme.
 - A Markdown file shows as it was left, source, Live Preview or Reading, also once the preview tab shows another file.
 - The changes of the work tree show the lines each file gained and lost, beside its letter.
+- The header of each group of changes adds up the lines of its files, beside their count.
 - The Markdown Reading view shows an HTML `<table>` as a table, with its cells' alignment and pictures.
 - HTML `<ul>`, `<ol>` and `<li>` show as lists in the Reading view, nested and numbered.
 - A `<details>` folds under its `<summary>` in the Reading view; click the summary to open it.
