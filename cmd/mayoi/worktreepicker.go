@@ -5,12 +5,14 @@ import (
 	"io/fs"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
 
 	"mayoi/internal/bg"
 	"mayoi/internal/git"
+	"mayoi/internal/remote"
 	"mayoi/internal/vfs"
 	"mayoi/internal/workspace"
 	"mayoi/locales"
@@ -39,6 +41,10 @@ type worktreePicker struct {
 	results []workspace.Match
 	shown   string // the query the results are of
 	stale   bool
+	// changes are the files each worktree has uncommitted, by its path,
+	// read while the box is open: absent while not read, -1 when the
+	// worktree could not be read.
+	changes map[string]int
 }
 
 // worktreeName is the name a worktree shows by: the folder it is in.
@@ -86,8 +92,46 @@ func (a *gitContext) openWorktreePicker() {
 				w.names[i] = strings.TrimSpace(worktreeName(t) + " " + t.Branch)
 			}
 			w.stale = true
+			a.readWorktreeChanges(w.trees)
 		})
 	})
+}
+
+// readWorktreeChanges counts the files each worktree has uncommitted, so
+// the box says which of them is still being worked in. It reads each work
+// tree in turn, in the background, and shows the count once it has it.
+func (a *gitContext) readWorktreeChanges(trees []git.Worktree) {
+	w := &a.app.worktrees
+	root := w.repoRoot
+	if remote.Is(root) {
+		// A remote work tree's folders are read over the connection, not
+		// here, and there is no local Git for them.
+		return
+	}
+	for _, t := range trees {
+		if t.Bare || t.Prunable || t.Path == "" {
+			continue
+		}
+		path := t.Path
+		bg.Go(func() {
+			n := -1
+			if r, err := git.Open(path); err == nil {
+				if c, err := r.Changed(); err == nil {
+					n = c
+				}
+			}
+			a.app.post(func() {
+				if !w.open || w.repoRoot != root {
+					return
+				}
+				if w.changes == nil {
+					w.changes = map[string]int{}
+				}
+				w.changes[path] = n
+				a.app.invalidate()
+			})
+		})
+	}
 }
 
 // closeWorktreePicker shuts the box and lets go of the worktrees it read.
@@ -368,5 +412,12 @@ func (a *gitContext) worktreeRow(c *ui.Context, ch worktreeChoice, i int) {
 			}
 			ui.Text(c, strings.Join(parts, " • ")).FontSize(12).TextColor(p.faint).SingleLine()
 		})
+		if n, ok := w.changes[t.Path]; ok && !t.Prunable {
+			label, col := locales.WorktreeClean(), p.faint
+			if n > 0 {
+				label, col = locales.WorktreeFilesChanged(strconv.Itoa(n)), p.modified
+			}
+			ui.Text(c, label).FontSize(12).TextColor(col).SingleLine().Shrink(0)
+		}
 	})
 }

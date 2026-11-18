@@ -1558,6 +1558,8 @@
   "worktreeMissing": "The worktree folder {path} is missing.",
   "worktreeMissingDetail": "The branch “{branch}” is checked out in a worktree whose folder is gone:\n\n{path}\n\nPrune the missing worktree and switch to the branch here?",
   "worktreeMissingHint": "missing",
+  "worktreeFilesChanged": "{n} changed",
+  "worktreeClean": "clean",
   "worktreeMissingTitle": "Worktree Folder Missing",
   "worktreeNewWindow": "New Window",
   "worktreeNoCommit": "Make a first commit to create a worktree.",

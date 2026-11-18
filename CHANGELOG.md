@@ -15,6 +15,7 @@ needs a `## <version>` section here, or its build fails.
 - The header of each group of changes adds up the lines of its files, beside their count.
 - The branch button counts the branches, and the worktree button the worktrees, beside their names.
 - The theme preference names Solarized Light, which it lacked.
+- The box of the worktrees says how many files each has uncommitted, or that it is clean.
 - The Markdown Reading view shows an HTML `<table>` as a table, with its cells' alignment and pictures.
 - HTML `<ul>`, `<ol>` and `<li>` show as lists in the Reading view, nested and numbered.
 - A `<details>` folds under its `<summary>` in the Reading view; click the summary to open it.

@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"mayoi/internal/git"
+	"mayoi/locales"
 )
 
 // The changes of the work tree show the lines each file gained and lost,
@@ -71,4 +73,44 @@ func TestScmCountsBranchesAndWorktrees(t *testing.T) {
 		t.Errorf("the branches are not counted in %q", hs.tt.Texts())
 	}
 	hs.shot("scm-counts")
+}
+
+// The worktrees the box lists say how many files each has uncommitted, so
+// which of them is still being worked in shows.
+func TestWorktreePickerCountsUncommittedFiles(t *testing.T) {
+	hs := newHarness(t, false)
+	git := hs.gitRepo()
+	git("branch", "side")
+	wt := filepath.Join(t.TempDir(), "wt")
+	git("worktree", "add", "-q", wt, "side")
+	if err := os.WriteFile(filepath.Join(wt, "one.txt"), []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wt, "two.txt"), []byte("two\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hs.settleGit()
+	hs.a.run("git.switchWorktree")
+	w := &hs.a.worktrees
+	for range 200 {
+		hs.settle()
+		if !w.open {
+			t.Fatal("the box closed")
+		}
+		if !w.loading && len(w.changes) == len(w.trees) {
+			break
+		}
+	}
+	// Git spells the folder as the system resolves it, past /private.
+	resolved, err := filepath.EvalSymlinks(wt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, ok := w.changes[resolved]; !ok || n != 2 {
+		t.Fatalf("the worktree has %d files uncommitted (%v), want 2", n, ok)
+	}
+	if want := locales.WorktreeFilesChanged("2"); !hs.tt.HasText(want) {
+		t.Errorf("%q is not in the box: %q", want, hs.tt.Texts())
+	}
+	hs.shot("worktree-changes")
 }

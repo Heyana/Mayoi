@@ -1330,6 +1330,8 @@
   "worktreeMissing": "工作树文件夹 {path} 不存在。",
   "worktreeMissingDetail": "分支 “{branch}” 检出于一个文件夹已不存在的工作树中：\n\n{path}\n\n要修剪丢失的工作树并在此处切换到该分支吗？",
   "worktreeMissingHint": "文件夹缺失",
+  "worktreeFilesChanged": "{n} 处改动",
+  "worktreeClean": "干净",
   "worktreeMissingTitle": "工作树文件夹丢失",
   "worktreeNewWindow": "新窗口",
   "worktreeNoCommit": "先做一次提交，才能创建工作树。",

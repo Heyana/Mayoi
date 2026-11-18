@@ -203,6 +203,29 @@ func (r *Repo) Status() (*Status, error) {
 	return st, nil
 }
 
+// Changed counts the files of a work tree that differ from HEAD, its
+// untracked ones whole, as source control lists them. It reads less than
+// Status: no branch, no command in progress.
+func (r *Repo) Changed() (int, error) {
+	out, err := r.run(nil, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	if err != nil {
+		return 0, err
+	}
+	recs := strings.Split(string(out), "\x00")
+	n := 0
+	for i := 0; i < len(recs); i++ {
+		if recs[i] == "" {
+			continue
+		}
+		n++
+		// A renamed or copied file has its old path in the record after.
+		if len(recs[i]) > 1 && (recs[i][0] == 'R' || recs[i][0] == 'C') {
+			i++
+		}
+	}
+	return n, nil
+}
+
 func parseStatus(r *Repo, out []byte) *Status {
 	st := &Status{}
 	recs := strings.Split(string(out), "\x00")

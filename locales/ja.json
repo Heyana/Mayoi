@@ -1330,6 +1330,8 @@
   "worktreeMissing": "ワークツリーのフォルダ {path} がありません。",
   "worktreeMissingDetail": "ブランチ “{branch}” は、フォルダーがなくなったワークツリーでチェックアウトされています:\n\n{path}\n\n見つからないワークツリーを整理して、ここでブランチに切り替えますか?",
   "worktreeMissingHint": "フォルダなし",
+  "worktreeFilesChanged": "{n} 件変更",
+  "worktreeClean": "クリーン",
   "worktreeMissingTitle": "ワークツリーのフォルダーがありません",
   "worktreeNewWindow": "新しいウィンドウ",
   "worktreeNoCommit": "ワークツリーを作成するには、まず最初のコミットを行ってください。",

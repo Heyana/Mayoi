@@ -13470,6 +13470,26 @@ func (msgs Messages) WorktreeMissingHint() string {
 	return Catalog.Format(msgs.locale, "worktreeMissingHint", nil)
 }
 
+// WorktreeFilesChanged says "{n} changed"
+// in the language the app shows.
+func WorktreeFilesChanged(n string) string { return In(i18n.Locale()).WorktreeFilesChanged(n) }
+
+// WorktreeFilesChanged says "{n} changed"
+// in the language of msgs.
+func (msgs Messages) WorktreeFilesChanged(n string) string {
+	return Catalog.Format(msgs.locale, "worktreeFilesChanged", map[string]any{"n": n})
+}
+
+// WorktreeClean says "clean"
+// in the language the app shows.
+func WorktreeClean() string { return In(i18n.Locale()).WorktreeClean() }
+
+// WorktreeClean says "clean"
+// in the language of msgs.
+func (msgs Messages) WorktreeClean() string {
+	return Catalog.Format(msgs.locale, "worktreeClean", nil)
+}
+
 // WorktreeMissingTitle says "Worktree Folder Missing"
 // in the language the app shows.
 func WorktreeMissingTitle() string { return In(i18n.Locale()).WorktreeMissingTitle() }
