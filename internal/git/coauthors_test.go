@@ -24,3 +24,26 @@ func TestParseNumstat(t *testing.T) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
 }
+
+// TestParseNumstatFilesByNewPath keeps a renamed file's numbers with the
+// path it has now, which git prints after the one it had.
+func TestParseNumstatFilesByNewPath(t *testing.T) {
+	out := []byte("3\t1\ta.go\x0015\t6\t\x00old/b.go\x00new/b.go\x00-\t-\timg.png\x00")
+	got := parseNumstatFiles(out)
+	want := map[string]FileStat{
+		"a.go":     {Added: 3, Deleted: 1},
+		"new/b.go": {Added: 15, Deleted: 6},
+		"img.png":  {},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for path, st := range want {
+		if got[path] != st {
+			t.Fatalf("%s: got %+v, want %+v", path, got[path], st)
+		}
+	}
+	if _, ok := got["old/b.go"]; ok {
+		t.Fatalf("the old path kept the numbers: %v", got)
+	}
+}

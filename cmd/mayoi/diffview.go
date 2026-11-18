@@ -444,9 +444,12 @@ type commitDiff struct {
 	hash string
 	// from is the commit a comparison starts at, whose changes are those
 	// from it to hash; "" for the changes of the commit hash alone.
-	from            string
-	info            git.Commit
-	files           []git.CommitFile
+	from  string
+	info  git.Commit
+	files []git.CommitFile
+	// stat is how many lines each of the files gained and lost, by path,
+	// read with the files.
+	stat            map[string]git.FileStat
 	loading, loaded bool
 	err             string
 	// lines is how many lines tall its card is, as laid out last, and
@@ -1012,8 +1015,12 @@ func (a *app) listCommitFiles(v *diffView) {
 			info, err = r.CommitInfo(hash)
 		}
 		var files []git.CommitFile
+		var stat map[string]git.FileStat
 		if err == nil {
 			files, err = r.CommitFiles(info)
+			if err == nil {
+				stat, _ = r.CommitNumstat(info) // the files show without their numbers
+			}
 		}
 		a.post(func() {
 			cm.loading, cm.loaded = false, true
@@ -1022,7 +1029,7 @@ func (a *app) listCommitFiles(v *diffView) {
 				v.changed()
 				return
 			}
-			cm.info, cm.files = info, files
+			cm.info, cm.files, cm.stat = info, files, stat
 			v.files = make([]*diffFile, 0, len(files))
 			for _, e := range commitEntries(files) {
 				f := &diffFile{path: e.Path, base: diffCommit, group: groupCommits, letter: e.X, gitStale: true}

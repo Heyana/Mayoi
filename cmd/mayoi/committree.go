@@ -166,6 +166,15 @@ func (a *app) commitFilesUI(c *ui.Context, v *diffView, width float32) {
 		ui.Row(c).Height(26).Shrink(0).AlignItems(ui.Center).Gap(6).Padding(0, 6, 0, 12).Children(func() {
 			ui.Text(c, locales.DiffCommitFiles()).FontSize(11).FontWeight(600).TextColor(p.muted).SingleLine().Shrink(1)
 			ui.Text(c, fmt.Sprint(len(v.files))).FontSize(10.5).TextColor(p.muted).Padding(0, 5).Radius(8).Background(p.hover)
+			if v.commit != nil {
+				add, del := commitStatTotals(v.commit.stat)
+				if add > 0 {
+					ui.Text(c, fmt.Sprintf("+%d", add)).FontSize(10.5).FontWeight(500).TextColor(p.added).Shrink(0)
+				}
+				if del > 0 {
+					ui.Text(c, fmt.Sprintf("−%d", del)).FontSize(10.5).FontWeight(500).TextColor(p.removed).Shrink(0)
+				}
+			}
 			ui.Spacer(c)
 			if a.smallButton(c, iconX, locales.DiffHideCommitFiles()) {
 				a.post(a.toggleCommitFiles)
@@ -293,7 +302,13 @@ func (a *app) commitTreeRowUI(c *ui.Context, v *diffView, i int, r commitTreeRow
 		})
 	}
 	row.Children(func() {
-		a.commitFileLabel(c, e, tree, a.diffRelPath(v, e.Path))
+		var st *git.FileStat
+		if cm := v.commit; cm != nil {
+			if s, ok := cm.stat[e.Path]; ok {
+				st = &s
+			}
+		}
+		a.commitFileLabel(c, e, tree, a.diffRelPath(v, e.Path), st)
 		if f != nil && v.fileViewed(f) {
 			ui.Icon(c, iconCheck).FontSize(12).TextColor(p.muted).Shrink(0).Tooltip(locales.PrViewed())
 		}
@@ -315,9 +330,10 @@ func (a *app) diffRelPath(v *diffView, path string) string {
 }
 
 // commitFileLabel shows a file a commit changed: its icon, its name in
-// the color of its change, and in a list by path its folder; then the
-// letter of its change.
-func (a *app) commitFileLabel(c *ui.Context, e git.Entry, tree bool, rel string) {
+// the color of its change, and in a list by path its folder; then how
+// many lines it gained and lost, when that was read, and the letter of
+// its change.
+func (a *app) commitFileLabel(c *ui.Context, e git.Entry, tree bool, rel string, st *git.FileStat) {
 	p := a.pal
 	name := filepath.Base(e.Path)
 	icon, col := entryIcon(p, e, name)
@@ -330,6 +346,15 @@ func (a *app) commitFileLabel(c *ui.Context, e git.Entry, tree bool, rel string)
 		ui.Text(c, dir).FontSize(11.5).TextColor(p.faint).SingleLine().Shrink(1)
 	}
 	ui.Spacer(c)
+	if st != nil {
+		if st.Added > 0 {
+			ui.Text(c, fmt.Sprintf("+%d", st.Added)).FontSize(10.5).FontWeight(500).TextColor(p.added).Shrink(0)
+		}
+		if st.Deleted > 0 {
+			ui.Text(c, fmt.Sprintf("−%d", st.Deleted)).FontSize(10.5).FontWeight(500).TextColor(p.removed).
+				Shrink(0).Padding(0, 0, 0, 2)
+		}
+	}
 	ui.Text(c, string(e.X)).FontSize(11).FontWeight(600).Font(a.font.family).Padding(0, 4, 0, 2).
 		TextColor(gitColor(p, e.X)).Shrink(0)
 }
@@ -338,6 +363,7 @@ func (a *app) commitFileLabel(c *ui.Context, e git.Entry, tree bool, rel string)
 // changed, for its rows in source control.
 type commitFilesRead struct {
 	files   []git.CommitFile
+	stat    map[string]git.FileStat
 	loading bool
 	err     string
 }
@@ -374,8 +400,12 @@ func (a *gitContext) readCommitFiles(cm git.Commit) {
 	bg.Go(func() {
 		defer recoverCrash()
 		files, err := r.CommitFiles(cm)
+		var stat map[string]git.FileStat
+		if err == nil {
+			stat, _ = r.CommitNumstat(cm)
+		}
 		a.app.post(func() {
-			read.loading, read.files = false, files
+			read.loading, read.files, read.stat = false, files, stat
 			if err != nil {
 				read.err = errorLine(err)
 			}
@@ -504,7 +534,13 @@ func (a *gitContext) scmCommitFile(c *ui.Context, i int, r scmRow, action *func(
 					ui.Text(c, r.name).FontSize(13).TextColor(p.text).SingleLine().Shrink(1)
 				})
 			default:
-				a.app.commitFileLabel(c, r.e, tree, a.git.repo.Rel(r.e.Path))
+				var st *git.FileStat
+				if read := a.scm.commitFiles[cm.Hash]; read != nil {
+					if s, ok := read.stat[r.e.Path]; ok {
+						st = &s
+					}
+				}
+				a.app.commitFileLabel(c, r.e, tree, a.git.repo.Rel(r.e.Path), st)
 			}
 		})
 	})

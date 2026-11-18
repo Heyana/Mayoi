@@ -635,6 +635,9 @@ func (a *gitContext) scmListInput(out ui.Element, rows []scmRow, reveal func(int
 				s.selection.Add(r.key)
 			}
 		}
+		if list == "commit:" {
+			a.showChosenCommits()
+		}
 	}
 	if s.row >= 0 && s.row < len(rows) && out.Submitted() {
 		switch r := rows[s.row]; {
@@ -1171,6 +1174,38 @@ func (a *gitContext) selectScmRow(i int, mods ui.Modifiers) {
 		s.anchor = r.key
 	}
 	s.row = i
+	if list == "commit:" {
+		a.showChosenCommits()
+	}
+}
+
+// showChosenCommits shows the changes of the commits chosen together: from
+// the parent of the oldest to the newest, in one diff of the files they
+// changed and how many lines each gained and lost. One commit chosen, or
+// none, shows nothing of its own, as its row's click does.
+func (a *gitContext) showChosenCommits() {
+	s, r := a.scm, a.git.repo
+	if s.selection.Len() < 2 || r == nil {
+		return
+	}
+	var oldest, newest *git.Commit
+	for _, row := range a.scmRows() {
+		if row.commit == nil || !s.selection.Has(row.key) {
+			continue
+		}
+		if newest == nil {
+			newest = row.commit
+		}
+		oldest = row.commit
+	}
+	if oldest == nil || newest == nil || oldest.Hash == newest.Hash {
+		return
+	}
+	from := git.EmptyTree
+	if len(oldest.Parents) > 0 {
+		from = oldest.Parents[0]
+	}
+	a.previewCommit(git.Commit{Hash: from + ".." + newest.Hash})
 }
 
 // scmInput takes Copy and Select All of the Edit menu while the list has
@@ -1340,6 +1375,20 @@ func (a *gitContext) scmCommit(c *ui.Context, r scmRow, action *func()) {
 		} else if a.hasCommitChecks() {
 			// How its checks went, in room every pushed row keeps.
 			a.commitChecksIcon(c, cm.Hash, action)
+		}
+		// How much the commit changed, once it is read for a row chosen.
+		if a.scm.selection.Has(r.key) {
+			if read := a.wantCommitStat(*cm); !read.loading && !read.failed {
+				addCol, delCol := p.added, p.removed
+				if read.stat.Added == 0 {
+					addCol = p.faint
+				}
+				if read.stat.Deleted == 0 {
+					delCol = p.faint
+				}
+				ui.Text(c, fmt.Sprintf("+%d", read.stat.Added)).FontSize(10.5).TextColor(addCol).Shrink(0)
+				ui.Text(c, fmt.Sprintf("−%d", read.stat.Deleted)).FontSize(10.5).TextColor(delCol).Shrink(0)
+			}
 		}
 		ui.Text(c, shortAgo(cm.Time, time.Now())).FontSize(11).TextColor(p.faint).Shrink(0).Padding(0, 2, 0, 0)
 	})

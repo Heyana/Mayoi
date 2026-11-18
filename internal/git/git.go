@@ -1037,6 +1037,57 @@ func (r *Repo) CommitStat(c Commit) (CommitStat, error) {
 	return parseNumstat(string(out)), nil
 }
 
+// EmptyTree is the hash of Git's empty tree, the side a change from
+// before the first commit is compared against.
+const EmptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+// FileStat is how many lines a file a change touched gained and lost.
+type FileStat struct{ Added, Deleted int }
+
+// CommitNumstat returns how many lines each file a commit changed gained
+// and lost from its first parent, or that the first commit added, by path;
+// a binary file's are zero.
+func (r *Repo) CommitNumstat(c Commit) (map[string]FileStat, error) {
+	args := []string{"diff-tree", "-r", "-z", "-M", "--numstat", "--no-commit-id"}
+	if len(c.Parents) == 0 {
+		args = append(args, "--root", c.Hash)
+	} else {
+		args = append(args, c.Parents[0], c.Hash)
+	}
+	out, err := r.run(nil, args...)
+	if err != nil {
+		return nil, err
+	}
+	return parseNumstatFiles(out), nil
+}
+
+// parseNumstatFiles reads git's NUL-separated --numstat by path, those of
+// a renamed file given by its new path, which follows its old one.
+func parseNumstatFiles(out []byte) map[string]FileStat {
+	recs := strings.Split(string(out), "\x00")
+	fs := make(map[string]FileStat, len(recs))
+	for i := 0; i < len(recs); i++ {
+		f := strings.SplitN(recs[i], "\t", 3)
+		if len(f) < 3 {
+			continue
+		}
+		path := f[2]
+		if path == "" {
+			if i+2 >= len(recs) {
+				break
+			}
+			path, i = recs[i+2], i+2
+		}
+		if path == "" {
+			continue
+		}
+		add, _ := strconv.Atoi(f[0])
+		del, _ := strconv.Atoi(f[1])
+		fs[path] = FileStat{Added: add, Deleted: del}
+	}
+	return fs
+}
+
 // parseNumstat adds up the lines git's --numstat prints, "added\tdeleted
 // \tpath", "-" for the counts of a binary file.
 func parseNumstat(out string) CommitStat {

@@ -1066,6 +1066,36 @@ func cardWidth(w float32) float32 {
 	return max(w-diffRailW-2*cardPadX, 120)
 }
 
+// commitStatTotals adds up how many lines the files of a commit's diff
+// gained and lost, as they were read.
+func commitStatTotals(stat map[string]git.FileStat) (add, del int) {
+	for _, st := range stat {
+		add += st.Added
+		del += st.Deleted
+	}
+	return add, del
+}
+
+// commitStatPieces are the pieces of a commit's card that say how many
+// lines its files gained and lost, in the color of each, gray for none.
+func commitStatPieces(stat map[string]git.FileStat, p *palette, label func(string, int, ui.Color) ui.Span, text func(ui.Span, bool) cardPiece) []cardPiece {
+	if len(stat) == 0 {
+		return nil
+	}
+	add, del := commitStatTotals(stat)
+	addCol, delCol := p.added, p.removed
+	if add == 0 {
+		addCol = p.faint
+	}
+	if del == 0 {
+		delCol = p.faint
+	}
+	return []cardPiece{
+		text(label(fmt.Sprintf("+%d", add), 500, addCol), true),
+		text(label(fmt.Sprintf("−%d", del), 500, delCol), false),
+	}
+}
+
 // layOutCommitCard lays out the card at the top of a commit's diff, its
 // text w wide.
 func (a *app) layOutCommitCard(c *ui.Context, v *diffView, w float32) *commitCard {
@@ -1120,6 +1150,7 @@ func (a *app) layOutCommitCard(c *ui.Context, v *diffView, w float32) *commitCar
 		// A comparison: its two commits, and what changed between them.
 		pieces = append(pieces, hashChip(cm.from, false), text(label("→", 400, p.muted), false), hashChip(cm.hash, false),
 			text(label(locales.CardFilesChanged(len(v.files)), 400, p.muted), true))
+		pieces = append(pieces, commitStatPieces(cm.stat, p, label, text)...)
 		return a.finishCommitCard(c, v, k, w, pieces)
 	}
 	author := label(info.Author, 600, p.text)
@@ -1190,6 +1221,7 @@ func (a *app) layOutCommitCard(c *ui.Context, v *diffView, w float32) *commitCar
 		pieces = append(pieces, text(label(locales.CardMergeOf(len(info.Parents)), 400, p.muted), true))
 	}
 	pieces = append(pieces, text(label(locales.CardFilesChanged(len(v.files)), 400, p.muted), true))
+	pieces = append(pieces, commitStatPieces(cm.stat, p, label, text)...)
 	return a.finishCommitCard(c, v, k, w, pieces)
 }
 
