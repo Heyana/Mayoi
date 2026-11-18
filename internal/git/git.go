@@ -1058,7 +1058,69 @@ func (r *Repo) CommitNumstat(c Commit) (map[string]FileStat, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parseNumstatFiles(out), nil
+	return r.absNumstat(parseNumstatFiles(out)), nil
+}
+
+// WorkNumstat returns the lines each changed file of the work tree added
+// and deleted, by its path there: the staged and the unstaged changes
+// against HEAD together, and the files Git does not track yet whole.
+func (r *Repo) WorkNumstat() (map[string]FileStat, error) {
+	out, err := r.run(nil, "diff", "--numstat", "-z", "-M", "HEAD", "--")
+	if err != nil {
+		// Before the first commit, the changes are against the empty tree,
+		// which is no HEAD: the staged ones, then the unstaged.
+		out, err = r.run(nil, "diff", "--numstat", "-z", "-M", "--cached", "--")
+		if err != nil {
+			return nil, err
+		}
+		unstaged, err := r.run(nil, "diff", "--numstat", "-z", "-M", "--")
+		if err != nil {
+			return nil, err
+		}
+		out = append(append(out, '\x00'), unstaged...)
+	}
+	stat := r.absNumstat(parseNumstatFiles(out))
+	others, err := r.run(nil, "ls-files", "--others", "--exclude-standard", "-z")
+	if err != nil {
+		// The changes count; those Git does not track yet do not.
+		return stat, nil
+	}
+	for _, rel := range strings.Split(string(others), "\x00") {
+		if rel == "" {
+			continue
+		}
+		if n := countLines(r.Abs(rel)); n > 0 {
+			stat[r.Abs(rel)] = FileStat{Added: n}
+		}
+	}
+	return stat, nil
+}
+
+// absNumstat keys the lines of each file of a work tree by its path there.
+func (r *Repo) absNumstat(stat map[string]FileStat) map[string]FileStat {
+	abs := make(map[string]FileStat, len(stat))
+	for rel, st := range stat {
+		abs[r.Abs(rel)] = st
+	}
+	return abs
+}
+
+// countLines counts the lines of a file Git does not track yet, 0 for one
+// it reads as binary, one too big to read, or one it cannot.
+func countLines(path string) int {
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > 8<<20 {
+		return 0
+	}
+	b, err := os.ReadFile(path)
+	if err != nil || bytes.IndexByte(b, 0) >= 0 {
+		return 0
+	}
+	n := bytes.Count(b, []byte("\n"))
+	if len(b) > 0 && b[len(b)-1] != '\n' {
+		n++ // the last line, which has no newline at its end
+	}
+	return n
 }
 
 // parseNumstatFiles reads git's NUL-separated --numstat by path, those of

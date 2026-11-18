@@ -1110,6 +1110,17 @@ func (a *gitContext) scmFile(c *ui.Context, r scmRow, action *func()) {
 				}
 			}
 		}
+		if st, ok := a.git.workStat[e.Path]; ok {
+			// The lines a file gained and lost, before its letter.
+			if st.Added > 0 {
+				ui.Text(c, fmt.Sprintf("+%d", st.Added)).FontSize(10.5).FontWeight(500).TextColor(p.added).
+					Shrink(0).Padding(0, 0, 0, 4)
+			}
+			if st.Deleted > 0 {
+				ui.Text(c, fmt.Sprintf("−%d", st.Deleted)).FontSize(10.5).FontWeight(500).TextColor(p.removed).
+					Shrink(0).Padding(0, 0, 0, 2)
+			}
+		}
 		ui.Text(c, string(letter)).FontSize(11).FontWeight(600).Font(a.app.font.family).Padding(0, 4, 0, 2).
 			TextColor(gitColor(p, letter)).Shrink(0)
 	})

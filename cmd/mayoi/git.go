@@ -40,6 +40,9 @@ type gitState struct {
 	// them, with the letter of the one that matters most.
 	entries map[string]git.Entry
 	dirs    map[string]byte
+	// workStat are the lines each changed file added and deleted, by path,
+	// read with the status.
+	workStat map[string]git.FileStat
 	// groups are the files of status in each group of the source control
 	// view, worked out for the status groupsOf.
 	groups   [groupCount][]git.Entry
@@ -305,6 +308,7 @@ func (a *gitContext) refreshGit() {
 		defer recoverCrash()
 		var st *git.Status
 		var err error
+		var workStat map[string]git.FileStat
 		var refs git.Refs
 		var stashes []git.Stash
 		var stashesErr error
@@ -313,6 +317,10 @@ func (a *gitContext) refreshGit() {
 		var config time.Time
 		readGit(func() {
 			st, err = r.Status()
+			if err == nil && len(st.Entries) > 0 {
+				// A clean work tree has no lines to count.
+				workStat, _ = r.WorkNumstat()
+			}
 			refs, _ = r.Refs()
 			// The stash is listed only while its ref is there.
 			if refs.Stash {
@@ -337,6 +345,7 @@ func (a *gitContext) refreshGit() {
 				return
 			}
 			a.setStatus(st)
+			g.workStat = workStat
 			g.branches, g.tags = refs.Branches, refs.Tags
 			if stashesErr == nil {
 				g.stashes = stashes

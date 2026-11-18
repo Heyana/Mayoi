@@ -47,3 +47,56 @@ func TestParseNumstatFilesByNewPath(t *testing.T) {
 		t.Fatalf("the old path kept the numbers: %v", got)
 	}
 }
+
+// The lines of a commit are keyed by the paths its files have in the work
+// tree, as the editor looks them up.
+func TestCommitNumstatKeysArePathsInTheWorkTree(t *testing.T) {
+	r, git := repo(t)
+	write(t, r.Root, "a.txt", "one\ntwo\nthree\nfour\nfive\n")
+	git("add", "a.txt")
+	git("commit", "-q", "-m", "more")
+	cs, err := r.Log(1, false)
+	if err != nil || len(cs) != 1 {
+		t.Fatalf("log %v, %v", cs, err)
+	}
+	stat, err := r.CommitNumstat(cs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stat[r.Abs("a.txt")]; got.Added != 2 || got.Deleted != 0 {
+		t.Fatalf("a.txt: %+v, want +2", got)
+	}
+	if _, ok := stat["a.txt"]; ok {
+		t.Fatalf("a commit's file kept its path in the repository: %v", stat)
+	}
+}
+
+// A work tree's lines count what a file gained and lost against HEAD, and
+// a file Git does not track yet whole.
+func TestWorkNumstat(t *testing.T) {
+	r, git := repo(t)
+	write(t, r.Root, "a.txt", "one\nTWO\nthree\nfour\n")
+	write(t, r.Root, "c.txt", "new\nlines\nhere\n")
+	stat, err := r.WorkNumstat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stat[r.Abs("a.txt")]; got.Added != 2 || got.Deleted != 1 {
+		t.Fatalf("a.txt: %+v, want +2 −1", got)
+	}
+	if got := stat[r.Abs("c.txt")]; got.Added != 3 || got.Deleted != 0 {
+		t.Fatalf("c.txt: %+v, want +3", got)
+	}
+	if _, ok := stat[r.Abs("b.txt")]; ok {
+		t.Fatalf("a file unchanged is not counted: %v", stat)
+	}
+	// A staged change counts as the work tree's too, against HEAD.
+	git("add", "a.txt")
+	stat, err = r.WorkNumstat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stat[r.Abs("a.txt")]; got.Added != 2 || got.Deleted != 1 {
+		t.Fatalf("a.txt staged: %+v, want +2 −1", got)
+	}
+}

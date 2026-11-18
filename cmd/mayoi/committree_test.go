@@ -57,6 +57,16 @@ func TestCommitFilesPanel(t *testing.T) {
 	if !tt.HasText("Files") {
 		t.Errorf("no panel: %q", tt.Texts())
 	}
+	// Each file of the panel has the lines it changed.
+	if cm := v.commit; cm == nil || len(cm.stat) == 0 {
+		t.Fatalf("the files have no lines counted")
+	} else {
+		for _, f := range v.files {
+			if _, ok := cm.stat[f.path]; !ok {
+				t.Fatalf("%s has no lines counted in %v", f.path, cm.stat)
+			}
+		}
+	}
 	// The diff beside the panel shows one file at a time, the first.
 	if got := rowFiles(v); len(got) != 1 {
 		t.Fatalf("rows of %v, want one file alone", got)
