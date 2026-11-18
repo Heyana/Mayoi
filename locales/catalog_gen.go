@@ -15452,6 +15452,16 @@ func (msgs Messages) PrefOptThemeGtavi() string {
 	return Catalog.Format(msgs.locale, "prefOptThemeGtavi", nil)
 }
 
+// PrefOptThemeSolarizedlight says "Solarized Light"
+// in the language the app shows.
+func PrefOptThemeSolarizedlight() string { return In(i18n.Locale()).PrefOptThemeSolarizedlight() }
+
+// PrefOptThemeSolarizedlight says "Solarized Light"
+// in the language of msgs.
+func (msgs Messages) PrefOptThemeSolarizedlight() string {
+	return Catalog.Format(msgs.locale, "prefOptThemeSolarizedlight", nil)
+}
+
 // PrefOptAppearanceLight says "Light"
 // in the language the app shows.
 func PrefOptAppearanceLight() string { return In(i18n.Locale()).PrefOptAppearanceLight() }

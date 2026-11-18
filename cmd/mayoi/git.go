@@ -28,9 +28,15 @@ type gitState struct {
 	lookup          *int // the lookup running, which a reset drops
 
 	status   *git.Status
-	branches []string    // the local branches, read with the status
-	stashes  []git.Stash // the newest stashes, read with the status
-	remotes  []string    // the remotes, read with the status
+	branches []string // the local branches, read with the status
+	// worktrees are the checkouts of the repository, the main one first,
+	// read with the status once one is made or removed, and worktreesOf
+	// is the folder they are listed in when they were read.
+	worktrees    []git.Worktree
+	worktreesOf  time.Time
+	worktreesAny bool
+	stashes      []git.Stash // the newest stashes, read with the status
+	remotes      []string    // the remotes, read with the status
 	// remotesStale has the next read of the status read the remotes too.
 	remotesStale bool
 	// remotesOf is when the config was changed that the remotes were read
@@ -304,6 +310,9 @@ func (a *gitContext) refreshGit() {
 	// tree here only once the config they are in changed.
 	readRemotes, remotesOf := g.remotesStale, g.remotesOf
 	g.remotesStale = false
+	// The worktrees are read again when one is made or removed, which the
+	// folder Git lists them in tells by its time.
+	worktreesOf, worktreesAny := g.worktreesOf, g.worktreesAny
 	bg.Go(func() {
 		defer recoverCrash()
 		var st *git.Status
@@ -315,6 +324,9 @@ func (a *gitContext) refreshGit() {
 		var remotes []string
 		var remotesErr error
 		var config time.Time
+		var worktrees []git.Worktree
+		var readWorktrees bool
+		worktreesOf0 := worktreesOf
 		readGit(func() {
 			st, err = r.Status()
 			if err == nil && len(st.Entries) > 0 {
@@ -335,6 +347,18 @@ func (a *gitContext) refreshGit() {
 			if readRemotes {
 				remotes, remotesErr = r.Remotes()
 			}
+			if local {
+				readWorktrees = !worktreesAny
+				var tree time.Time
+				if info, err := os.Stat(filepath.Join(r.Common, "worktrees")); err == nil {
+					tree = info.ModTime()
+					worktreesOf = tree
+					readWorktrees = readWorktrees || !tree.Equal(worktreesOf0)
+				}
+				if readWorktrees {
+					worktrees, _ = r.Worktrees()
+				}
+			}
 		})
 		a.app.post(func() {
 			if !g.statusRead.Done(r) || g.repo != r {
@@ -349,6 +373,9 @@ func (a *gitContext) refreshGit() {
 			g.branches, g.tags = refs.Branches, refs.Tags
 			if stashesErr == nil {
 				g.stashes = stashes
+			}
+			if readWorktrees {
+				g.worktrees, g.worktreesOf, g.worktreesAny = worktrees, worktreesOf, true
 			}
 			if readRemotes && remotesErr == nil {
 				g.remotes, g.remotesOf = remotes, config
