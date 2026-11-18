@@ -96,6 +96,19 @@ func parseDiffCross(s string) diffCross {
 // chosen, rather than every file changed one after another.
 func (a *app) oneFile() bool { return a.settings != nil && a.settings.DiffFiles == "one" }
 
+// oneFileOf reports whether the diff v shows one file at a time: as the
+// setting says, or always when it is a commit's beside the panel of its
+// files, where the file chosen in the panel is the one it shows.
+func (a *app) oneFileOf(v *diffView) bool {
+	if v.local {
+		return false
+	}
+	if v.commit != nil && v.commit.pr == nil && a.showsCommitFiles(v) {
+		return true
+	}
+	return a.oneFile()
+}
+
 // diffHighlight is how a diff shows what changed within a line: the
 // words that changed, the characters within them, or nothing more than
 // the lines changed. What it shows is only so: the changes a diff acts
@@ -1087,7 +1100,7 @@ func (a *app) refreshDiff(v *diffView) {
 			}
 		}
 	}
-	one := a.oneFile() && !v.local
+	one := a.oneFileOf(v)
 	switch {
 	case one:
 		// One file at a time reads the file shown alone.
@@ -1330,7 +1343,7 @@ func (a *app) splits(v *diffView, viewW float32) bool {
 // scrolling to the file to reveal once it is listed.
 func (a *app) layoutRows(v *diffView, l diffGeometry) {
 	b := diffBuild{gen: v.gen, split: v.split, wrap: a.wrapsDiff(v), full: v.full, aligned: a.settings.DiffAlignedRows, context: a.diffContextOf(), whitespace: a.diffWhitespaceOf(), font: a.font}
-	b.one = a.oneFile() && !v.local
+	b.one = a.oneFileOf(v)
 	if v.shown != nil {
 		b.shown = *v.shown
 	}
@@ -2704,11 +2717,14 @@ func (a *app) diffButtons(c *ui.Context, t *colTab) {
 			return
 		}
 		m.Separator()
+		// A commit's diff beside its files shows the file chosen there,
+		// so every file at once is not its to show.
+		fixed := a.oneFileOf(v) && !a.oneFile()
 		for _, o := range []struct {
 			one   bool
 			label string
 		}{{false, locales.DiffFilesAll()}, {true, locales.DiffFilesOne()}} {
-			if m.Item(o.label).Checked(a.oneFile() == o.one).Chosen() {
+			if m.Item(o.label).Checked(a.oneFileOf(v) == o.one).Disabled(fixed && !o.one).Chosen() {
 				a.post(func() { a.setDiffFiles(v, o.one) })
 			}
 		}

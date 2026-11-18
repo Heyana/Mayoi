@@ -25,8 +25,9 @@ func showTree(rows []treeRow) string {
 }
 
 // The tab of a commit hides the panel of its files at first; shown, it
-// lists them beside the diff, in a tree of their folders: a click on one
-// scrolls the diff to it, a folder closes, and the panel hides again.
+// lists them beside the diff, in a tree of their folders, and the diff
+// shows the file the panel has chosen, alone: a click on one shows that
+// file, a folder closes, and the panel hides again.
 func TestCommitFilesPanel(t *testing.T) {
 	hs := newHarness(t, true)
 	hs.gitRepo()
@@ -56,15 +57,28 @@ func TestCommitFilesPanel(t *testing.T) {
 	if !tt.HasText("Files") {
 		t.Errorf("no panel: %q", tt.Texts())
 	}
+	// The diff beside the panel shows one file at a time, the first.
+	if got := rowFiles(v); len(got) != 1 {
+		t.Fatalf("rows of %v, want one file alone", got)
+	}
 	hs.shot("commit-files-panel")
-	// A file clicked is the one the diff shows at its top.
+	if len(v.files) < 2 {
+		t.Fatalf("the commit changed %d files, want more", len(v.files))
+	}
+	// A file clicked is the one the diff shows, alone.
 	if err := tt.Click("style.css"); err != nil {
 		t.Fatal(err)
 	}
 	hs.settle()
 	k := slices.IndexFunc(v.files, func(f *diffFile) bool { return filepath.Base(f.path) == "style.css" })
-	if k < 0 || v.cursor != v.heads[k] {
-		t.Errorf("cursor %d, not the header %v of style.css", v.cursor, v.heads)
+	if k < 0 {
+		t.Fatalf("style.css is not one of the files")
+	}
+	if f := hs.settleShown(v); f != v.files[k] {
+		t.Errorf("the diff shows %v, not style.css", f)
+	}
+	if got := rowFiles(v); len(got) != 1 || got[0] != v.files[k].path {
+		t.Errorf("rows of %v, want style.css alone", got)
 	}
 	if v.tree.top != v.files[k] {
 		t.Errorf("the file at the top is not style.css")
