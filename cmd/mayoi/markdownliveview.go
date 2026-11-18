@@ -177,7 +177,27 @@ func (a *app) setLive(d *editor, on bool) {
 	}
 	d.live = on
 	a.invalidate()
+	a.rememberMarkdownMode(d)
 	a.rememberTabs()
+}
+
+// rememberMarkdownMode keeps how a Markdown file shows, for the next time
+// it opens: a tab replaced, as the preview tab is by a click on another
+// file, opens again as it was left.
+func (a *app) rememberMarkdownMode(d *editor) {
+	doc := d.document
+	if doc.path == "" || !isMarkdown(doc) {
+		return
+	}
+	mode := markdownMode(d)
+	if mode == "" {
+		delete(a.window.MarkdownModes, doc.path)
+		return
+	}
+	if a.window.MarkdownModes == nil {
+		a.window.MarkdownModes = map[string]string{}
+	}
+	a.window.MarkdownModes[doc.path] = mode
 }
 
 // toggleLivePreview switches the editor shown between Live Preview and

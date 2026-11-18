@@ -639,6 +639,7 @@ func (a *app) setPreview(d *editor, on bool) {
 	if t := a.activeTab(); t != nil && t.ed == d && a.focus == paneEditor {
 		a.focusTab(t)
 	}
+	a.rememberMarkdownMode(d)
 	a.rememberTabs()
 }
 

@@ -380,6 +380,10 @@ type Session struct {
 	Expanded []string `json:"expanded,omitempty"`
 	// Review is the review comments not sent yet.
 	Review []ReviewNote `json:"review,omitempty"`
+	// MarkdownModes is how each Markdown file last showed, by path:
+	// "live", "reading", or none for its source. A file opens that way
+	// again, a replaced preview tab as by a click on another file.
+	MarkdownModes map[string]string `json:"markdownModes,omitempty"`
 }
 
 // ReviewNote is a review comment on lines of a file, as the settings keep

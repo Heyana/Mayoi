@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/png"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1046,5 +1047,42 @@ func TestParseLiveNestedEmbeds(t *testing.T) {
 		if b.embed && b.source != "![[other]]" {
 			t.Errorf("an embed's source is %q", b.source)
 		}
+	}
+}
+
+// A Markdown file shows as it was last shown, also once the preview tab
+// that showed it went on to another file.
+func TestMarkdownModeSticksToFile(t *testing.T) {
+	hs := newHarness(t, false)
+	hs.gitRepo()
+	a := hs.a
+	dir := t.TempDir()
+	pa, pb := filepath.Join(dir, "a.md"), filepath.Join(dir, "b.md")
+	os.WriteFile(pa, []byte("# A\n\nbody\n"), 0o644)
+	os.WriteFile(pb, []byte("# B\n\nbody\n"), 0o644)
+	a.previewFile(pa)
+	hs.settle()
+	if got := markdownMode(a.activeEditor()); got != "" {
+		t.Fatalf("a opens as %q, want its source", got)
+	}
+	a.setMarkdownMode("reading")
+	hs.settle()
+	// b takes the preview tab, and a opens again.
+	a.previewFile(pb)
+	hs.settle()
+	a.previewFile(pa)
+	hs.settle()
+	if got := markdownMode(a.activeEditor()); got != "reading" {
+		t.Fatalf("a opens again as %q, want reading", got)
+	}
+	// Back as its source, it opens as its source.
+	a.setMarkdownMode("")
+	hs.settle()
+	a.previewFile(pb)
+	hs.settle()
+	a.previewFile(pa)
+	hs.settle()
+	if got := markdownMode(a.activeEditor()); got != "" {
+		t.Fatalf("a opens again as %q, want its source", got)
 	}
 }

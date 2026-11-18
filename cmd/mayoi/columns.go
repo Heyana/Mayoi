@@ -305,7 +305,11 @@ func (a *app) openFileIn(col *column, at int, path string, focus bool) {
 	a.activate(col, at, focus)
 	if isMarkdown(t.ed.document) {
 		// Opened at a place in its text, as by search, it shows its text.
+		// Else it shows as it was left, or else as Markdown opens.
 		mode := a.prefs().MarkdownMode
+		if m, ok := a.window.MarkdownModes[path]; ok {
+			mode = m
+		}
 		t.ed.live = mode != ""
 		if mode == "reading" && !a.openingText {
 			a.setPreview(t.ed, true)
