@@ -137,6 +137,17 @@ func (a *app) diffPaneUI(c *ui.Context, v *diffView) {
 		}
 		return
 	}
+	// The one Markdown file of a diff reads as its document.
+	if vv := v.markdown; v.preview && vv != nil {
+		if f := previewFile(v); f != nil && f.path == vv.doc.path {
+			ui.Column(c).Fill().Background(p.editor).Children(func() {
+				a.markdownView(c, vv, filepath.Base(vv.doc.path))
+			})
+			return
+		}
+		// Another file shows now: its lines, not the one left.
+		v.preview, v.markdown = false, nil
+	}
 	lineH, charW := f.lineH, f.charW
 	view := v.pane.Bounds(c)
 	if view.W > 0 {

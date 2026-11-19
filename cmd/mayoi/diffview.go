@@ -338,6 +338,10 @@ type diffView struct {
 	wrapGen  int
 
 	files []*diffFile
+	// preview shows the one Markdown file of the diff as the document it
+	// is, in place of its lines, and markdown is its view.
+	preview  bool
+	markdown *viewer
 	// foldFiles is the last bulk choice, including files not yet listed.
 	// Once chosen, it also replaces automatic folding of large files.
 	foldFiles *bool
@@ -2374,6 +2378,49 @@ func (a *app) undoDiff(v *diffView, redo bool) {
 	}
 }
 
+// previewFile is the file of a diff that shows as its document: the one
+// file of it, when that file is Markdown.
+func previewFile(v *diffView) *diffFile {
+	if len(v.files) != 1 || !isMarkdownPath(v.files[0].path) {
+		return nil
+	}
+	return v.files[0]
+}
+
+// toggleDiffPreview shows the Markdown file of a diff as the document it
+// is, rendered and scrolled on its own, or its lines again.
+func (a *app) toggleDiffPreview(v *diffView) {
+	if v.preview {
+		if m := v.markdown; m != nil {
+			m.stop()
+		}
+		v.preview, v.markdown = false, nil
+		a.invalidate()
+		return
+	}
+	f := previewFile(v)
+	if f == nil {
+		return
+	}
+	text, err := os.ReadFile(f.path)
+	if err != nil || isBinary(text) {
+		a.tell(note{message: locales.PreviewEmpty()})
+		return
+	}
+	var doc *document
+	if i := a.docIndex(f.path); i >= 0 {
+		doc = a.docs[i]
+	} else {
+		a.nextID++
+		doc = newDocument(a.nextID, f.path, string(text), highlight.New(highlight.Lexer(f.path), a.invalidate))
+		a.docs = append(a.docs, doc)
+	}
+	v.markdown = newPreviewViewer(doc)
+	v.markdown.markdown = &markdownPreview{}
+	v.preview = true
+	a.invalidate()
+}
+
 // diffInput takes the keys of a diff that has the keyboard: those of a
 // pager, as Hunk has them, and, while its writable side is edited, the
 // typing and the keys of an editor. The undo and redo of the documents
@@ -2381,6 +2428,10 @@ func (a *app) undoDiff(v *diffView, redo bool) {
 func (a *app) diffInput(v *diffView, ev ui.InputEvent) bool {
 	// The box of a note being written takes its keys.
 	if a.typingNote() {
+		return false
+	}
+	// A preview scrolls itself, as reading does.
+	if v.preview {
 		return false
 	}
 	if ev.Kind == ui.InputKeyDown && v.edited != nil {
@@ -2642,6 +2693,11 @@ func (a *app) diffButtons(c *ui.Context, t *colTab) {
 	if v.commit != nil {
 		if button(iconListTree, a.withKey(locales.DiffToggleCommitFiles(), "git.toggleCommitFiles"), a.window.CommitFilesOpen).Clicked() {
 			a.post(a.toggleCommitFiles)
+		}
+	}
+	if previewFile(v) != nil {
+		if button(iconFileText, locales.MarkdownModeReading(), v.preview).Clicked() {
+			a.post(func() { a.toggleDiffPreview(v) })
 		}
 	}
 	act(iconArrowUp, locales.DiffPrevChange(), func() { v.stepHunk(-1, a.crossesDiff()) })
