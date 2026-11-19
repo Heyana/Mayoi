@@ -44,6 +44,39 @@ func TestDiffPreviewsTheOneMarkdownFile(t *testing.T) {
 	}
 }
 
+// A diff that shows one file at a time previews the file it shows, among
+// the others it lists.
+func TestDiffPreviewsTheFileItShows(t *testing.T) {
+	hs := newHarness(t, false)
+	hs.a.settings.DiffFiles = "one"
+	hs.gitRepo()
+	os.WriteFile(hs.path("main.go"), []byte("package main\n"), 0o644)
+	os.WriteFile(hs.path("a.md"), []byte("# A\n\ntext\n"), 0o644)
+	os.WriteFile(hs.path("b.txt"), []byte("b\n"), 0o644)
+	hs.settleGit()
+	md := hs.path("a.md")
+	hs.a.showChanges(diffTarget{path: md, base: diffIndex}, true)
+	hs.settle()
+	v := hs.a.activeTab().diff
+	if v == nil {
+		t.Fatal("no diff opened")
+	}
+	if len(v.files) < 2 {
+		t.Fatalf("%d files listed", len(v.files))
+	}
+	f := previewFile(v)
+	if f == nil || f.path != md {
+		t.Fatalf("the file shown previews as %v", f)
+	}
+	hs.shot("diff-preview-button")
+	hs.a.toggleDiffPreview(v)
+	hs.settle()
+	if v.markdown == nil || v.markdown.doc.path != md {
+		t.Fatalf("the preview is of %v", v.markdown)
+	}
+	hs.shot("diff-preview-oneshot")
+}
+
 // A diff of many files has no file to preview, and the toggle leaves it
 // as it is.
 func TestDiffPreviewsOnlyOneFile(t *testing.T) {

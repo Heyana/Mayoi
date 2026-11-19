@@ -2378,13 +2378,32 @@ func (a *app) undoDiff(v *diffView, redo bool) {
 	}
 }
 
-// previewFile is the file of a diff that shows as its document: the one
-// file of it, when that file is Markdown.
+// previewFile is the file of a diff that shows as its document: the file
+// it shows when it shows one at a time, or else the one Markdown file it
+// lists, whichever asks for no choice between files.
 func previewFile(v *diffView) *diffFile {
-	if len(v.files) != 1 || !isMarkdownPath(v.files[0].path) {
-		return nil
+	if v.built.one {
+		// The layout shows one file, the first until another is chosen.
+		i := v.shownIndex()
+		if i < 0 && len(v.files) > 0 {
+			i = 0
+		}
+		if i < 0 || !isMarkdownPath(v.files[i].path) {
+			return nil
+		}
+		return v.files[i]
 	}
-	return v.files[0]
+	var only *diffFile
+	for _, f := range v.files {
+		if !isMarkdownPath(f.path) {
+			continue
+		}
+		if only != nil {
+			return nil
+		}
+		only = f
+	}
+	return only
 }
 
 // toggleDiffPreview shows the Markdown file of a diff as the document it
