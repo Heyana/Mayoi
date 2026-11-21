@@ -570,12 +570,13 @@ func (f *frame) rail() float32 {
 	return max(f.railWidth, railW)
 }
 
-// railWidthFor is how wide the rail is for the names of its projects:
-// enough for the longest of them, within railW and railMaxW.
-func railWidthFor(names []string) float32 {
+// railWidthFor is how wide the rail is for the names of its projects and
+// the counts at the end of their rows: enough for the longest of each,
+// within railW and railMaxW.
+func railWidthFor(names []string, counts float32) float32 {
 	w := float32(railW)
 	for _, name := range names {
-		w = max(w, labelShape(name, railNameSize).w+railPad)
+		w = max(w, labelShape(name, railNameSize).w+railPad+counts)
 	}
 	return min(w, railMaxW)
 }
@@ -606,7 +607,11 @@ func (f *frame) railView(c *ui.Context, a *app) {
 	for i, h := range tabs {
 		names[i], _ = railName(h.a.folder())
 	}
-	width := railWidthFor(names)
+	var counts float32
+	for _, h := range tabs {
+		counts = max(counts, railChipsWidth(railChips(h, p)))
+	}
+	width := railWidthFor(names, counts)
 	f.railWidth, a.railWidth = width, width
 	rail := ui.Column(c.Key("rail")).Width(width).Shrink(0).Background(railGround(p)).BorderWidth(0, 1, 0, 0).BorderColor(p.seam())
 	// Past the last square: at the end.
@@ -617,7 +622,7 @@ func (f *frame) railView(c *ui.Context, a *app) {
 	// whether a project has a logo or not.
 	labels := make([]string, len(tabs))
 	for i, name := range names {
-		labels[i] = railFitShort(name, width-railPad)
+		labels[i] = railFitShort(name, width-railPad-counts)
 	}
 	rail.Children(func() {
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
@@ -777,8 +782,51 @@ func hasRepository(dir string) bool {
 // every second for a square no one looks at.
 const railChangesEvery = 10 * time.Second
 
-// railChangesSize is the size of the count on the square.
-const railChangesSize float32 = 10
+// railChipSize is the size of the counts at the end of a row.
+const railChipSize float32 = 9.5
+
+// railChip is a count at the right end of a project's row, in the color it
+// reads in.
+type railChip struct {
+	text string
+	col  ui.Color
+}
+
+// railChips are the counts of a project's branch, as its row draws them:
+// the commits to push, the commits to pull, and the files changed.
+func railChips(h *desktop, p *palette) []railChip {
+	var cs []railChip
+	if h.ahead > 0 {
+		cs = append(cs, railChip{railCount("\u2191", h.ahead), p.accent})
+	}
+	if h.behind > 0 {
+		cs = append(cs, railChip{railCount("\u2193", h.behind), p.modified})
+	}
+	if h.changes > 0 {
+		cs = append(cs, railChip{railCount("\u25cf", h.changes), p.danger})
+	}
+	return cs
+}
+
+// railCount is the count of n, as a row has room for it.
+func railCount(mark string, n int) string {
+	if n > 99 {
+		return mark + "99+"
+	}
+	return mark + strconv.Itoa(n)
+}
+
+// railChipsWidth is the room the counts take at the end of a row.
+func railChipsWidth(cs []railChip) float32 {
+	var w float32
+	for i, c := range cs {
+		if i > 0 {
+			w += 8
+		}
+		w += labelShape(c.text, railChipSize).w
+	}
+	return w
+}
 
 // railChanges is how many files the project's work tree has changed, read
 // of late in the background: 0 for a project with none, a folder that is
@@ -796,17 +844,20 @@ func (f *frame) railChanges(h *desktop) int {
 	h.changesBusy, h.changesGen = true, h.changesGen+1
 	gen := h.changesGen
 	bg.Go(func() {
-		n := 0
+		n, ahead, behind := 0, 0, 0
 		if r, err := git.Open(dir); err == nil {
-			if got, err := r.Changed(); err == nil {
-				n = got
+			// The branch's status says both what the work tree changed
+			// and how far its branch is from its upstream.
+			if st, err := r.Status(); err == nil {
+				n, ahead, behind = len(st.Entries), st.Ahead, st.Behind
 			}
 		}
 		h.a.post(func() {
 			if h.changesGen != gen {
 				return
 			}
-			h.changes, h.changesAt, h.changesBusy = n, time.Now(), false
+			h.changes, h.ahead, h.behind = n, ahead, behind
+			h.changesAt, h.changesBusy = time.Now(), false
 			// The rail draws only when something asks it to: ask again
 			// when the count is due, so the square keeps up with a work
 			// tree changed elsewhere.
@@ -878,7 +929,7 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 	if !calm && len(work.blocked) > 0 && time.Since(work.blockedSince) < pulseFor {
 		pulse = work.blockedSince
 	}
-	changes := f.railChanges(h)
+	f.railChanges(h)
 	col := avatarColor(p, dir)
 	if k, ok := railColor(p, style.Color); ok {
 		col = k
@@ -1032,19 +1083,15 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 			pt.Fill(ui.Rect{X: d.X - 2, Y: d.Y - 2, W: d.W + 4, H: d.H + 4}, ground, 7)
 			pt.Fill(d, p.text.Alpha(0.85), 5)
 		}
-		if n := changes; n > 0 {
-			// At the corner across from the dot of a program that waits,
-			// what the project's source control would say: the files it
-			// has changed, for a project not shown as for one shown.
-			what := strconv.Itoa(n)
-			if n > 99 {
-				what = "99+"
+		// At the row's end, what the project's branch has to do: the
+		// commits to push, to pull, and the files changed.
+		if cs := railChips(h, p); len(cs) > 0 {
+			x := sq.X + sq.W - 8 - railChipsWidth(cs)
+			for _, c := range cs {
+				l := labelShape(c.text, railChipSize)
+				pt.Glyphs(l.glyphs, x, sq.Y+sq.H/2+l.mid, c.col.Alpha(alpha))
+				x += l.w + 8
 			}
-			l := labelShape(what, railChangesSize)
-			badge := ui.Rect{X: sq.X, Y: sq.Y + sq.H - 11, W: l.w + 8, H: 15}
-			pt.Fill(ui.Rect{X: badge.X - 1, Y: badge.Y - 1, W: badge.W + 2, H: badge.H + 2}, ground, badge.H/2+1)
-			pt.Fill(badge, p.fill.Alpha(alpha), badge.H/2)
-			paintLabel(pt, badge, what, railChangesSize, p.fillText.Alpha(alpha))
 		}
 	})
 	b.ContextMenu(func(mn *ui.Menu) {

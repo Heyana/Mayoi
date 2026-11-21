@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -293,13 +294,13 @@ func TestRailNamesItsProjects(t *testing.T) {
 			t.Fatalf("no square named %q: %v", filepath.Base(dir), tt.Texts())
 		}
 	}
-	if want := railWidthFor([]string{"mayoi", "code-lab"}); f.rail() != want {
+	if want := railWidthFor([]string{"mayoi", "code-lab"}, 0); f.rail() != want {
 		t.Errorf("the rail is %v wide, want %v", f.rail(), want)
 	}
 	// A name longer than the rail's most is cut to it, its end in an
 	// ellipsis, and the rail holds at railMaxW.
 	long := strings.Repeat("a-very-long-repository-name-", 4)
-	if got := railWidthFor([]string{long}); got != railMaxW {
+	if got := railWidthFor([]string{long}, 0); got != railMaxW {
 		t.Errorf("a long name gives a rail %v wide, want %v", got, float32(railMaxW))
 	}
 	if got := railFitShort(long, railMaxW-railPad); !strings.HasSuffix(got, "…") {
@@ -393,6 +394,56 @@ func TestRailLooksLikeItself(t *testing.T) {
 	_ = f
 	if dir := os.Getenv("SHOTS"); dir != "" {
 		out, err := os.Create(filepath.Join(dir, "rail-look.png"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer out.Close()
+		png.Encode(out, tt.Image())
+	}
+}
+
+// A row says what its branch has to do: the commits to push, to pull, and
+// the files changed, each count where the row has room for it.
+func TestRailCountsWhatItsBranchHasToDo(t *testing.T) {
+	hs := newHarness(t, true)
+	git := hs.gitRepo()
+	bare := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", "--bare", "-b", "main", bare).CombinedOutput(); err != nil {
+		t.Fatalf("git init --bare: %v\n%s", err, out)
+	}
+	git("remote", "add", "origin", bare)
+	git("push", "-q", "-u", "origin", "main")
+	// Two commits pushed, then the branch back two: behind two.
+	writeLines(t, hs.path("two.go"), 3)
+	git("add", "two.go")
+	git("commit", "-q", "-m", "two")
+	writeLines(t, hs.path("three.go"), 3)
+	git("add", "three.go")
+	git("commit", "-q", "-m", "three")
+	git("push", "-q", "origin", "main")
+	git("reset", "-q", "--hard", "HEAD~2")
+	// One more commit, never pushed: ahead one. And a file changed in the
+	// work tree.
+	writeLines(t, hs.path("four.go"), 3)
+	git("add", "four.go")
+	git("commit", "-q", "-m", "four")
+	writeLines(t, hs.path("main.go"), 40)
+
+	_, tabs, tt := railFixture(t, hs.root, workspaceFixture(t))
+	deadline := time.Now().Add(5 * time.Second)
+	for tabs[0].ahead != 1 && time.Now().Before(deadline) {
+		step(tt)
+		tabs[0].a.drain()
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := [3]int{tabs[0].ahead, tabs[0].behind, tabs[0].changes}; got != [3]int{1, 2, 1} {
+		t.Fatalf("the other project's branch is %d to push, %d to pull, %d files changed", got[0], got[1], got[2])
+	}
+	if cs := railChips(tabs[0], tabs[0].a.pal); len(cs) != 3 || cs[0].text != "\u21911" || cs[1].text != "\u21932" || cs[2].text != "\u25cf1" {
+		t.Errorf("the counts of the row: %+v", cs)
+	}
+	if dir := os.Getenv("SHOTS"); dir != "" {
+		out, err := os.Create(filepath.Join(dir, "rail-branch.png"))
 		if err != nil {
 			t.Fatal(err)
 		}

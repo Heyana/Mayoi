@@ -52,6 +52,9 @@ type desktop struct {
 	changesAt   time.Time
 	changesBusy bool
 	changesGen  int
+	// ahead and behind are the commits its branch has to push and to
+	// pull, read with the changes.
+	ahead, behind int
 }
 
 // lifecycle is how far the app, or a window, is along closing: open,
