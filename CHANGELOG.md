@@ -24,6 +24,7 @@ needs a `## <version>` section here, or its build fails.
 - The rail reads the files each project has changed every ten seconds, at once on a switch to it, and only for a folder a repository holds.
 - A Git operation reads the rail's counts of every project at once, not a second later.
 - The rail fetches each project's upstream every half hour before it counts the commits to pull, so a branch behind someone else's commits says so.
+- The rail counts the files changed of every project as its window opens, and fetches alone: a remote that does not answer holds back neither the count nor the reads after it.
 - The Markdown Reading view shows an HTML `<table>` as a table, with its cells' alignment and pictures.
 - HTML `<ul>`, `<ol>` and `<li>` show as lists in the Reading view, nested and numbered.
 - A `<details>` folds under its `<summary>` in the Reading view; click the summary to open it.

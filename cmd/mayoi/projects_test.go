@@ -500,6 +500,32 @@ func TestRailFetchesWhatItsBranchFellBehind(t *testing.T) {
 	}
 }
 
+// A fetch that cannot reach its remote is no reason for the row to say
+// nothing: it counts the files changed here from what Git already knows.
+func TestRailReadsBeforeItFetches(t *testing.T) {
+	hs := newHarness(t, true)
+	git := hs.gitRepo()
+	// An upstream that never answers.
+	git("remote", "add", "origin", "http://127.0.0.1:1/none.git")
+	git("config", "branch.main.remote", "origin")
+	git("config", "branch.main.merge", "refs/heads/main")
+	writeLines(t, hs.path("main.go"), 40)
+
+	_, tabs, tt := railFixture(t, hs.root, workspaceFixture(t))
+	deadline := time.Now().Add(5 * time.Second)
+	for tabs[0].changes != 1 && time.Now().Before(deadline) {
+		step(tt)
+		tabs[0].a.drain()
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := tabs[0].changes; got != 1 {
+		t.Fatalf("the work tree has %d files changed, want 1", got)
+	}
+	if tabs[0].changesBusy {
+		t.Errorf("the row waited for a fetch to count the files changed")
+	}
+}
+
 func TestProjectWords(t *testing.T) {
 	for name, want := range map[string]string{
 		"mayoi": "M", "my-app": "MA", "mayoi_editor": "ME", "mayoiEditor": "ME", "go.dev": "GD", "": "?",

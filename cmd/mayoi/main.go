@@ -57,8 +57,9 @@ type desktop struct {
 	ahead, behind int
 	// fetchedAt is when the project last fetched its upstream, which a
 	// stale read fetches before it counts how far the branch has fallen
-	// behind.
+	// behind, and fetchBusy while that fetch runs.
 	fetchedAt time.Time
+	fetchBusy bool
 }
 
 // lifecycle is how far the app, or a window, is along closing: open,

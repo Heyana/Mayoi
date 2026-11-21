@@ -1205,7 +1205,8 @@ func (r *Repo) FetchUpstream(upstream string) error {
 	if !ok || remote == "" {
 		return nil
 	}
-	_, err := r.run(nil, "fetch", "--quiet", "--no-tags", "--", remote)
+	_, err := r.run(nil, "-c", "http.lowSpeedLimit=1", "-c", "http.lowSpeedLimitTime=8",
+		"fetch", "--quiet", "--no-tags", "--", remote)
 	return err
 }
 

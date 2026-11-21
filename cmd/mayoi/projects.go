@@ -856,32 +856,44 @@ func (f *frame) railChanges(h *desktop) int {
 	h.changesBusy, h.changesGen = true, h.changesGen+1
 	gen := h.changesGen
 	bg.Go(func() {
-		n, ahead, behind, fetched := 0, 0, 0, false
-		if r, err := git.Open(dir); err == nil {
+		var st *git.Status
+		r, err := git.Open(dir)
+		if err == nil {
 			// The branch's status says both what the work tree changed
 			// and how far its branch is from its upstream.
-			if st, err := r.Status(); err == nil {
-				n, ahead, behind = len(st.Entries), st.Ahead, st.Behind
-				if due && st.Upstream != "" {
-					// A branch is only known to be behind once the fetch
-					// has heard of the commits: count again after it.
-					if err := r.FetchUpstream(st.Upstream); err == nil {
-						fetched = true
-						if again, err := r.Status(); err == nil {
-							n, ahead, behind = len(again.Entries), again.Ahead, again.Behind
-						}
-					}
-				}
-			}
+			st, _ = r.Status()
 		}
 		h.a.post(func() {
 			if h.changesGen != gen {
 				return
 			}
-			h.changes, h.ahead, h.behind = n, ahead, behind
 			h.changesAt, h.changesBusy = time.Now(), false
-			if fetched {
+			if st != nil {
+				h.changes, h.ahead, h.behind = len(st.Entries), st.Ahead, st.Behind
+			}
+			// The fetch goes alone, and the row is drawn from what Git
+			// already knows: a fetch that waits on a slow remote must not
+			// hold back the count of the files changed here, nor the
+			// reads that follow it.
+			if due && r != nil && st != nil && st.Upstream != "" && !h.fetchBusy {
+				h.fetchBusy = true
+				// A fetch that fails is not tried again for the interval,
+				// or a branch with no network would ask every ten seconds.
 				h.fetchedAt = h.changesAt
+				upstream := st.Upstream
+				bg.Go(func() {
+					err := r.FetchUpstream(upstream)
+					h.a.post(func() {
+						h.fetchBusy = false
+						if err != nil {
+							return
+						}
+						// The fetch heard of the commits: read them again,
+						// at once.
+						h.changesAt = time.Time{}
+						h.a.services.Invalidate()
+					})
+				})
 			}
 			// The rail draws only when something asks it to: ask again
 			// when the count is due, so the square keeps up with a work
