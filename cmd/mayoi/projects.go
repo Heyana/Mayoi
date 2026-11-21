@@ -855,6 +855,13 @@ func (f *frame) railChanges(h *desktop) int {
 	due := time.Since(h.fetchedAt) >= railFetchEvery
 	h.changesBusy, h.changesGen = true, h.changesGen+1
 	gen := h.changesGen
+	// A project left alone never draws, and its app runs the work posted
+	// to it only once it does: the window's own app runs it here instead,
+	// so a row shows without a switch to its tab.
+	post, draw := h.a.post, h.a.invalidate
+	if t := f.active; t != nil {
+		post, draw = t.a.post, t.a.invalidate
+	}
 	bg.Go(func() {
 		var st *git.Status
 		r, err := git.Open(dir)
@@ -863,7 +870,7 @@ func (f *frame) railChanges(h *desktop) int {
 			// and how far its branch is from its upstream.
 			st, _ = r.Status()
 		}
-		h.a.post(func() {
+		post(func() {
 			if h.changesGen != gen {
 				return
 			}
@@ -899,7 +906,7 @@ func (f *frame) railChanges(h *desktop) int {
 			// when the count is due, so the square keeps up with a work
 			// tree changed elsewhere.
 			// Not counted as background work: a test would wait it out.
-			time.AfterFunc(railChangesEvery, h.a.services.Invalidate)
+			time.AfterFunc(railChangesEvery, draw)
 		})
 	})
 	return h.changes
