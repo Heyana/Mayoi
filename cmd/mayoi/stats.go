@@ -228,13 +228,13 @@ func (a *app) statsView(c *ui.Context) {
 					}
 				})
 				// Each span over its column of counts.
-				ui.Row(c).Padding(8, 14, 4, 14).Gap(statColumnGap).Children(func() {
+				ui.Row(c).MinHeight(statHeadH).Padding(0, statEdge).Gap(statColumnGap).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
 					ui.Text(c, "").Grow(1).Basis(0).MinWidth(0)
 					for s := 0; s < statSpans; s++ {
 						ui.Text(c, statSpanName(s)).Width(statColumnW).Shrink(0).FontSize(11.5).TextColor(p.faint).SingleLine()
 					}
 				})
-				ui.Scroll(c.Key("stats-rows")).MaxHeight(420).Padding(2, 14, 8, 14).Children(func() {
+				ui.Scroll(c.Key("stats-rows")).MaxHeight(420).Padding(2, 14, 4, 14).Children(func() {
 					if len(st.rows) == 0 {
 						// While a read runs, the rows are not there yet.
 						if !st.busy {
@@ -258,17 +258,31 @@ func (a *app) statsView(c *ui.Context) {
 }
 
 // statColumnW is how wide a span's column is, and statColumnGap the room
-// between them and the names.
+// between them and the names. statRowH is the height of a project's line and
+// of the total's, and statHeadH the height of the row that names the spans:
+// one rhythm, so the numbers line up down the panel.
 const (
-	statColumnW   float32 = 120
+	statColumnW   float32 = 124
 	statColumnGap float32 = 14
+	statRowH      float32 = 54
+	statHeadH     float32 = 34
+	// statEdge is how far the list's own padding and a line's put a line's
+	// names from the panel's edge, which the spans and the total are set
+	// to, so that every column starts on the same line.
+	statEdge = 14 + 6
 )
 
 // statsLine is one project of the panel: its name, and under each span the
 // commits it made and the lines they added and deleted.
 func (a *app) statsLine(c *ui.Context, row statsRow) {
 	p := a.pal
-	ui.Row(c.Key("stats:"+row.dir)).FillWidth().Padding(6, 0).Gap(statColumnGap).AlignItems(ui.Center).Children(func() {
+	b := ui.ButtonBase(c.Key("stats:"+row.dir)).FillWidth().MinHeight(statRowH).Padding(0, 6).Gap(statColumnGap).
+		Radius(6).AlignItems(ui.Center).Label(row.name)
+	if b.Hovered() {
+		b.Background(p.hover)
+	}
+	b.Transition(hoverFade)
+	b.Children(func() {
 		a.statsCells(c, row.name, p.text, row.count)
 	})
 }
@@ -278,8 +292,8 @@ func (a *app) statsLine(c *ui.Context, row statsRow) {
 // over each span.
 func (a *app) statsTotal(c *ui.Context, rows []statsRow) {
 	p := a.pal
-	ui.Row(c.Key("stats-total")).FillWidth().Padding(10, 0).Gap(statColumnGap).AlignItems(ui.Center).
-		BorderWidth(1, 0, 0, 0).BorderColor(p.border).Children(func() {
+	ui.Row(c.Key("stats-total")).FillWidth().MinHeight(statRowH).Padding(0, statEdge).Gap(statColumnGap).
+		AlignItems(ui.Center).Margin(0, 0, 8, 0).BorderWidth(1, 0, 0, 0).BorderColor(p.border).Children(func() {
 		a.statsCells(c, locales.StatsTotal(), p.muted, statsSum(rows))
 	})
 }
