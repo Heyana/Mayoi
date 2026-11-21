@@ -890,12 +890,21 @@ func railChipsWidth(cs []railChip) float32 {
 func railLines(h *desktop, p *palette) []railChip {
 	var cs []railChip
 	if h.added > 0 {
-		cs = append(cs, railChip{"+" + strconv.Itoa(h.added), p.added})
+		cs = append(cs, railChip{"+" + railLinesCount(h.added), p.added})
 	}
 	if h.deleted > 0 {
-		cs = append(cs, railChip{"\u2212" + strconv.Itoa(h.deleted), p.removed})
+		cs = append(cs, railChip{"\u2212" + railLinesCount(h.deleted), p.removed})
 	}
 	return cs
+}
+
+// railLinesCount is a count of lines as a row has room for it: thousands
+// in one decimal place, so a work tree of thousands keeps the name legible.
+func railLinesCount(n int) string {
+	if n >= 1000 {
+		return strconv.FormatFloat(float64(n)/1000, 'f', 1, 64) + "k"
+	}
+	return strconv.Itoa(n)
 }
 
 // railLinesWidth is the room the lines take at the left of a row's second

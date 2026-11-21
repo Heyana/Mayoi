@@ -598,6 +598,10 @@ func TestRailShowsTheLinesItsWorkAddedAndDeleted(t *testing.T) {
 	if cs := railLines(tabs[1], &palette{}); len(cs) == 0 || cs[0].text != "+6" {
 		t.Fatalf("the row lists %v, want +6", cs)
 	}
+	// Thousands read short, so the name keeps its room.
+	if got := railLines(&desktop{added: 3386, deleted: 1234}, &palette{}); len(got) != 2 || got[0].text != "+3.4k" || got[1].text != "\u22121.2k" {
+		t.Fatalf("the row lists %v, want +3.4k −1.2k", got)
+	}
 	// When the project last moved: a change of its work tree is now.
 	if since := time.Since(tabs[1].activityAt); since > time.Minute || since < 0 {
 		t.Fatalf("the project moved %v ago, want just now", since)
