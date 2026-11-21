@@ -55,6 +55,10 @@ type desktop struct {
 	// ahead and behind are the commits its branch has to push and to
 	// pull, read with the changes.
 	ahead, behind int
+	// fetchedAt is when the project last fetched its upstream, which a
+	// stale read fetches before it counts how far the branch has fallen
+	// behind.
+	fetchedAt time.Time
 }
 
 // lifecycle is how far the app, or a window, is along closing: open,

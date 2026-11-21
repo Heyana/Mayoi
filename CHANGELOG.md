@@ -22,6 +22,8 @@ needs a `## <version>` section here, or its build fails.
 - The rail names each project beside a mark of its own, its initials on a wash of its color or its logo, in rows as wide as the longest name.
 - The end of each project's row counts the commits its branch has to push, to pull, and the files its work tree has changed.
 - The rail reads the files each project has changed every ten seconds, at once on a switch to it, and only for a folder a repository holds.
+- A Git operation reads the rail's counts of every project at once, not a second later.
+- The rail fetches each project's upstream every half hour before it counts the commits to pull, so a branch behind someone else's commits says so.
 - The Markdown Reading view shows an HTML `<table>` as a table, with its cells' alignment and pictures.
 - HTML `<ul>`, `<ol>` and `<li>` show as lists in the Reading view, nested and numbered.
 - A `<details>` folds under its `<summary>` in the Reading view; click the summary to open it.

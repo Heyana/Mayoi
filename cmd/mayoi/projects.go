@@ -782,6 +782,12 @@ func hasRepository(dir string) bool {
 // every second for a square no one looks at.
 const railChangesEvery = 10 * time.Second
 
+// railFetchEvery is how often a project fetches its upstream before the
+// counts are read: a branch falls behind commits made elsewhere, and Git
+// knows that only once it has heard of them. Half an hour is GitHub
+// Desktop's own least interval between background fetches.
+const railFetchEvery = 30 * time.Minute
+
 // railChipSize is the size of the counts at the end of a row.
 const railChipSize float32 = 9.5
 
@@ -838,18 +844,34 @@ func (f *frame) railChanges(h *desktop) int {
 		// holds.
 		return 0
 	}
-	if h.changesBusy || time.Since(h.changesAt) < railChangesEvery {
+	// Git did something here since the read: the counts are stale at once,
+	// not after the interval.
+	opened := h.a.railOpAt.After(h.changesAt)
+	if h.changesBusy || (!opened && time.Since(h.changesAt) < railChangesEvery) {
 		return h.changes
 	}
+	// Whether the branch is due a fetch is decided here, of the rail's
+	// own field, so the read below only sees a copy of it.
+	due := time.Since(h.fetchedAt) >= railFetchEvery
 	h.changesBusy, h.changesGen = true, h.changesGen+1
 	gen := h.changesGen
 	bg.Go(func() {
-		n, ahead, behind := 0, 0, 0
+		n, ahead, behind, fetched := 0, 0, 0, false
 		if r, err := git.Open(dir); err == nil {
 			// The branch's status says both what the work tree changed
 			// and how far its branch is from its upstream.
 			if st, err := r.Status(); err == nil {
 				n, ahead, behind = len(st.Entries), st.Ahead, st.Behind
+				if due && st.Upstream != "" {
+					// A branch is only known to be behind once the fetch
+					// has heard of the commits: count again after it.
+					if err := r.FetchUpstream(st.Upstream); err == nil {
+						fetched = true
+						if again, err := r.Status(); err == nil {
+							n, ahead, behind = len(again.Entries), again.Ahead, again.Behind
+						}
+					}
+				}
 			}
 		}
 		h.a.post(func() {
@@ -858,6 +880,9 @@ func (f *frame) railChanges(h *desktop) int {
 			}
 			h.changes, h.ahead, h.behind = n, ahead, behind
 			h.changesAt, h.changesBusy = time.Now(), false
+			if fetched {
+				h.fetchedAt = h.changesAt
+			}
 			// The rail draws only when something asks it to: ask again
 			// when the count is due, so the square keeps up with a work
 			// tree changed elsewhere.

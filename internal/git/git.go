@@ -1197,6 +1197,18 @@ func (r *Repo) Fetch() error {
 	return err
 }
 
+// FetchUpstream fetches only the remote the branch's upstream lives in,
+// without tags: what counting the commits to pull needs, not every remote
+// a fork has.
+func (r *Repo) FetchUpstream(upstream string) error {
+	remote, _, ok := strings.Cut(upstream, "/")
+	if !ok || remote == "" {
+		return nil
+	}
+	_, err := r.run(nil, "fetch", "--quiet", "--no-tags", "--", remote)
+	return err
+}
+
 // Pull merges the upstream's commits, when that is a fast-forward.
 func (r *Repo) Pull() error {
 	_, err := r.run(nil, "pull", "--ff-only")

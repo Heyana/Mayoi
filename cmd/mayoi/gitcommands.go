@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/egoist/mygo/ui"
 	"mayoi/internal/git"
 )
@@ -12,6 +14,10 @@ func (a *app) refreshHistory()          { a.repository().refreshHistory() }
 func (a *app) setStatus(st *git.Status) { a.repository().setStatus(st) }
 func (a *app) branch() string           { return a.repository().branch() }
 func (a *app) gitChanged() {
+	// What Git did here changes what the rail says of every project, at
+	// once: a row that waited out its interval would show a count from
+	// before the commit for another ten seconds.
+	a.railOpAt = time.Now()
 	// Editor marks discover Git independently, including repositories created
 	// after the window first looked. A global refresh must invalidate them
 	// even before source control has discovered a repository.

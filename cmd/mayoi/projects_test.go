@@ -452,6 +452,54 @@ func TestRailCountsWhatItsBranchHasToDo(t *testing.T) {
 	}
 }
 
+// The rail hears of commits made elsewhere by fetching: without one a
+// branch looks even with its upstream, however far it has fallen behind.
+func TestRailFetchesWhatItsBranchFellBehind(t *testing.T) {
+	hs := newHarness(t, true)
+	git := hs.gitRepo()
+	bare := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", "--bare", "-b", "main", bare).CombinedOutput(); err != nil {
+		t.Fatalf("git init --bare: %v\n%s", err, out)
+	}
+	git("remote", "add", "origin", bare)
+	git("push", "-q", "-u", "origin", "main")
+	// Another clone pushes a commit, which this one hears of only by
+	// fetching.
+	other := t.TempDir()
+	if out, err := exec.Command("git", "clone", "-q", bare, other).CombinedOutput(); err != nil {
+		t.Fatalf("git clone: %v\n%s", err, out)
+	}
+	writeLines(t, filepath.Join(other, "main.go"), 9)
+	for _, args := range [][]string{
+		{"add", "main.go"},
+		{"commit", "-q", "-m", "elsewhere"},
+		{"push", "-q", "origin", "main"},
+	} {
+		cmd := exec.Command("git", append([]string{"-C", other, "-c", "user.email=t@t", "-c", "user.name=t"}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	// Not fetched yet: as far as this work tree knows, it is even.
+	if out := git("status", "--porcelain=v2", "--branch"); !strings.Contains(out, "+0 -0") {
+		t.Fatalf("the branch does not look even with its upstream:\n%s", out)
+	}
+
+	_, tabs, tt := railFixture(t, hs.root, workspaceFixture(t))
+	deadline := time.Now().Add(5 * time.Second)
+	for tabs[0].behind != 1 && time.Now().Before(deadline) {
+		step(tt)
+		tabs[0].a.drain()
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := tabs[0].behind; got != 1 {
+		t.Fatalf("the branch is %d behind its upstream, want 1", got)
+	}
+	if tabs[0].fetchedAt.IsZero() {
+		t.Errorf("the row did not keep when it fetched")
+	}
+}
+
 func TestProjectWords(t *testing.T) {
 	for name, want := range map[string]string{
 		"mayoi": "M", "my-app": "MA", "mayoi_editor": "ME", "mayoiEditor": "ME", "go.dev": "GD", "": "?",

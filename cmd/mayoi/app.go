@@ -159,6 +159,9 @@ type app struct {
 	// railWidth is how wide the window's rail of projects is, as it drew
 	// it last, 0 until then.
 	railWidth float32
+	// railOpAt is when Git last did something here, which makes the
+	// rail's read of every project's counts stale at once.
+	railOpAt time.Time
 	// folderPrefs is what the folder chooses of the preferences, nil
 	// without a folder.
 	folderPrefs *folderPrefs
