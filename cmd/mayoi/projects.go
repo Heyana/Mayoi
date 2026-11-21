@@ -670,7 +670,7 @@ func (f *frame) railView(c *ui.Context, a *app) {
 	rail.Children(func() {
 		f.railTools(c, a)
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-			ui.Column(c).FillWidth().Padding(12, railInset, 12, railInset).Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Column(c).FillWidth().Padding(6, railInset, 12, railInset).Gap(6).AlignItems(ui.Center).Children(func() {
 				for i, h := range tabs {
 					f.railTab(c, a, h, i, labels[i])
 				}
@@ -691,8 +691,10 @@ func (f *frame) railTools(c *ui.Context, a *app) {
 	manual := f.m.s.RailOrder == "manual"
 	compact := f.m.s.RailRows == "compact"
 	w := f.rail() - 2*railInset
-	side := min((w-6)/2, float32(22))
-	ui.Row(c.Key("rail-tools")).Width(w).Gap(10).Margin(0, 0, 6, 0).Children(func() {
+	side := min((w-12-8)/2, float32(20))
+	// The icons start where the marks of the rows do, and the row of them
+	// sits as close under the first project as a project sits to another.
+	ui.Row(c.Key("rail-tools")).Width(w).Gap(8).Padding(0, 6, 0, 6).Children(func() {
 		f.railTool(c, a, "rail-sort", iconSort, !manual, side,
 			locales.RailSortActivity(), locales.RailSortManual(), f.toggleRailOrder)
 		icon := iconRows
@@ -745,7 +747,7 @@ func (f *frame) railTool(c *ui.Context, a *app, key string, icon *ui.SVG, on boo
 	})
 	b.Children(func() {
 		ui.Box(c).Absolute().Fill().Justify(ui.Center).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, icon).FontSize(15).TextColor(ink)
+			ui.Icon(c, icon).FontSize(14).TextColor(ink)
 		})
 	})
 	if b.Clicked() {
