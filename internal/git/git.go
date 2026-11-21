@@ -1215,8 +1215,16 @@ type Committed struct {
 // CommitsSince are the commits of the branch since when, newest first, with
 // the lines each added and deleted: a merge counts as a commit of no lines
 // of its own.
-func (r *Repo) CommitsSince(when time.Time) ([]Committed, error) {
-	out, err := r.run(nil, "log", "--since="+when.Format(time.RFC3339), "--format=COMMIT %ct", "--numstat")
+// No renames are detected, nor merges counted: the read of a repository of
+// thousands of commits costs seconds for them, and a rename adds no lines
+// of its own that a person sees as work.
+func (r *Repo) CommitsSince(when time.Time, author string) ([]Committed, error) {
+	args := []string{"log", "--since=" + when.Format(time.RFC3339), "--no-renames", "--no-merges",
+		"--format=COMMIT %ct", "--numstat"}
+	if author != "" {
+		args = append(args, "--author="+author)
+	}
+	out, err := r.run(nil, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -1245,6 +1253,40 @@ func (r *Repo) CommitsSince(when time.Time) ([]Committed, error) {
 		}
 	}
 	return stats, nil
+}
+
+// CountSince is how many commits of the branch were made since when, by
+// author if one is given: it reads no diff, and answers in a moment a
+// month of commits.
+func (r *Repo) CountSince(when time.Time, author string) (int, error) {
+	args := []string{"rev-list", "--count", "--since=" + when.Format(time.RFC3339)}
+	if author != "" {
+		args = append(args, "--author="+author)
+	}
+	out, err := r.run(nil, append(args, "HEAD")...)
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// Identity is who makes the commits here, as Git says: the email Git is
+// set to commit with, or else the name.
+func (r *Repo) Identity() string {
+	for _, key := range []string{"user.email", "user.name"} {
+		out, err := r.run(nil, "config", key)
+		if err != nil {
+			continue
+		}
+		if v := strings.TrimSpace(string(out)); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // Fetch fetches from the remotes.

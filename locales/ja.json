@@ -894,6 +894,7 @@
   "railRowsCompact": "名前のみ · クリックで行数と時刻",
   "railRowsFull": "行数と時刻を表示 · クリックで名前のみ",
   "railSortActivity": "最近の活動順 · クリックで手動順",
+  "statsMineX": "自分",
   "statsTotal": "合計",
   "statsTitle": "最近のコミット",
   "statsReading": "読み込み中…",

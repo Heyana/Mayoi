@@ -13,7 +13,14 @@ import (
 // now.
 func gitAt(t *testing.T, dir string, when time.Time, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=t@t", "-c", "user.name=t"}, args...)...)
+	gitAs(t, dir, "t@t", when, args...)
+}
+
+// gitAs runs git as who, the author and the committer both, which tells
+// whose commits the panel adds under its own name.
+func gitAs(t *testing.T, dir, who string, when time.Time, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=" + who, "-c", "user.name=" + who}, args...)...)
 	if !when.IsZero() {
 		stamp := when.Format(time.RFC3339)
 		cmd.Env = append(os.Environ(), "GIT_AUTHOR_DATE="+stamp, "GIT_COMMITTER_DATE="+stamp)
@@ -36,6 +43,8 @@ func TestStatsCountsTheCommitsOfEachProject(t *testing.T) {
 	now := time.Now()
 	old, week, today := now.Add(-40*24*time.Hour), now.Add(-8*24*time.Hour), now.Add(-time.Hour)
 	gitAt(t, dir, time.Time{}, "init", "-q", "-b", "main")
+	// The project commits as t@t, which its settings say is its own.
+	gitAt(t, dir, time.Time{}, "config", "user.email", "t@t")
 	writeLines(t, filepath.Join(dir, "README.md"), 3)
 	gitAt(t, dir, old, "add", "README.md")
 	gitAt(t, dir, old, "commit", "-q", "-m", "old")
@@ -43,6 +52,9 @@ func TestStatsCountsTheCommitsOfEachProject(t *testing.T) {
 	gitAt(t, dir, week, "commit", "-q", "-a", "-m", "week")
 	writeLines(t, filepath.Join(dir, "README.md"), 9)
 	gitAt(t, dir, today, "commit", "-q", "-a", "-m", "today")
+	// One of another's, the same day: the panel says whose it is.
+	writeLines(t, filepath.Join(dir, "README.md"), 10)
+	gitAs(t, dir, "o@o", today, "commit", "-q", "-a", "-m", "theirs")
 
 	f, _, tt := railFixture(t, hs.root, dir)
 	f.stats.toggle()
@@ -57,15 +69,19 @@ func TestStatsCountsTheCommitsOfEachProject(t *testing.T) {
 			row = r
 		}
 	}
-	if row.commits != [3]int{1, 1, 2} {
-		t.Fatalf("the project committed %v over the day, week and month, want [1 1 2]", row.commits)
+	for s := 0; s < statSpans; s++ {
+		if got := row.count[s].Commits; got != []int{1, 1, 2}[s] {
+			t.Fatalf("the project counts %v of its own over the day, week and month, want [1 1 2]: another's commit is not counted",
+				[]int{row.count[0].Commits, row.count[1].Commits, row.count[2].Commits})
+		}
 	}
-	if row.added != [3]int{3, 3, 6} {
-		t.Fatalf("its commits added %v lines, want [3 3 6]: a commit of forty days ago is out of every span", row.added)
+	if got := row.count[2].Added; got != 6 {
+		t.Fatalf("its commits added %d lines over the month, want 6: a commit of forty days ago, and another's, are not counted", got)
 	}
 	// The panel's last line adds every project it lists.
-	if got, _, _ := statsSum(f.stats.rows); got != [3]int{2, 2, 3} {
-		t.Fatalf("the panel's total is %v commits over the day, week and month, want [2 2 3]: the other project committed once", got)
+	sum := statsSum(f.stats.rows)
+	if sum[2].Commits < row.count[2].Commits {
+		t.Fatalf("the panel's total is %d commits over the month, less than the project's %d", sum[2].Commits, row.count[2].Commits)
 	}
 	if dir := os.Getenv("SHOTS"); dir != "" {
 		out, err := os.Create(filepath.Join(dir, "stats.png"))

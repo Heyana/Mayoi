@@ -33,8 +33,7 @@ needs a `## <version>` section here, or its build fails.
 - The rail counts the files changed of every project as its window opens, and fetches alone: a remote that does not answer holds back neither the count nor the reads after it.
 - The rail shows the counts of a project whose tab has not been switched to yet, rather than only once it is.
 - `mayoi projects` lists the projects of the rail, adds folders to it, and removes them, so a script or an agent can register its own projects.
-- The panel of recent commits ends with all its projects added up: how many commits they made over the day, the week and the month before, and how many lines those commits added and deleted.
-- A button beside the title bar's opens a panel of recent commits: of each project of the rail, what it committed over the last day, week and month, with the lines those commits added and deleted, read from Git in the background and again every five minutes while the panel is open.
+- A button beside the title bar's opens a panel of recent commits: what each project of the rail committed itself over the last day, week and month, with the lines those commits added and deleted, and the total of every project at its end. Commits of others are left out. The counts read first, as they need no diff of a commit, and the lines follow; Git is read again every five minutes while the panel is open.
 - `mayoi projects list` says each project's label beside its folder, and `mayoi projects label` and `unlabel` name a project on the rail.
 - The Markdown Reading view shows an HTML `<table>` as a table, with its cells' alignment and pictures.
 - HTML `<ul>`, `<ol>` and `<li>` show as lists in the Reading view, nested and numbered.
