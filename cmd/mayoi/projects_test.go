@@ -360,6 +360,47 @@ func TestRailShowsTheLogoBesideTheName(t *testing.T) {
 	_ = f
 }
 
+// The rail of a window of the projects it usually holds, for the eye: a
+// logo, names of a few lengths, and the bar of the project shown.
+func TestRailLooksLikeItself(t *testing.T) {
+	root := t.TempDir()
+	var dirs []string
+	for _, name := range []string{"vmk-1.0", "code-lab", "nsgo", ".workbuddy"} {
+		dir := filepath.Join(root, name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		dirs = append(dirs, dir)
+	}
+	f, tabs, tt := railFixture(t, dirs...)
+	logo := filepath.Join(root, "logo.png")
+	img := image.NewRGBA(image.Rect(0, 0, 96, 96))
+	for y := range 96 {
+		for x := range 96 {
+			img.Set(x, y, color.RGBA{R: 240, G: 175, B: 30, A: 255})
+		}
+	}
+	file, err := os.Create(logo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(file, img); err != nil {
+		t.Fatal(err)
+	}
+	file.Close()
+	tabs[1].logoSrc = decodeProjectLogo(logo)
+	step(tt)
+	_ = f
+	if dir := os.Getenv("SHOTS"); dir != "" {
+		out, err := os.Create(filepath.Join(dir, "rail-look.png"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer out.Close()
+		png.Encode(out, tt.Image())
+	}
+}
+
 func TestProjectWords(t *testing.T) {
 	for name, want := range map[string]string{
 		"mayoi": "M", "my-app": "MA", "mayoi_editor": "ME", "mayoiEditor": "ME", "go.dev": "GD", "": "?",

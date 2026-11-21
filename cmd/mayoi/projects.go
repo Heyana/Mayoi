@@ -45,7 +45,7 @@ const (
 )
 
 // railPad is the room over a name on its square, both sides.
-const railPad float32 = 20
+const railPad float32 = 28
 
 // railNameSize is the size of a project's name on its square, railLogo the
 // side of the logo it shows before the name, and railTextLead the room the
@@ -618,7 +618,7 @@ func (f *frame) railView(c *ui.Context, a *app) {
 	}
 	rail.Children(func() {
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-			ui.Column(c).FillWidth().Padding(8, 0, 10, 0).Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Column(c).FillWidth().Padding(12, 8, 12, 8).Gap(4).AlignItems(ui.Center).Children(func() {
 				for i, h := range tabs {
 					f.railTab(c, a, h, i, labels[i])
 				}
@@ -740,8 +740,8 @@ func (f *frame) move(h, before *desktop) {
 
 // railSquare is the side of a project's square, and railRadius its corners.
 const (
-	railSquare = 32
-	railRadius = 9
+	railSquare = 28
+	railRadius = 8
 )
 
 // railName is the name of the project of dir on the rail, and where its
@@ -884,7 +884,7 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 	if dir != "" && h.needsLogoScan(dir, icon) {
 		f.scanProjectLogo(a, h, dir, icon)
 	}
-	b := ui.ButtonBase(c.Key(fmt.Sprintf("project-%d", h.a.window.ID))).Width(f.rail()).Height(railSquare + 4).Shrink(0).
+	b := ui.ButtonBase(c.Key(fmt.Sprintf("project-%d", h.a.window.ID))).Width(f.rail()).Height(railSquare).Shrink(0).
 		Label(name).Description(railDescription(where, work)).Drag(railDrag{h})
 	f.railTip(c, a, b, name, where, keys, dirty, work, alert, h.a.alertState, alertCol, conn, connCol)
 	f.railDrop(b, a, h)
@@ -907,16 +907,16 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 		f.hoverOn = nil
 	}
 	hovered, pressed, dragged := b.Hovered(), b.Pressed(), b.Dragging()
-	pill, fill := float32(0), float32(0.14)
+	// At rest, a row is its name and a bar of the project's color: the
+	// color marks the project, it does not fill the row.
+	fill := float32(0)
 	switch {
 	case on:
-		pill, fill = 20, 0.30
+		fill = 1
 	case hovered:
-		pill, fill = 8, 0.22
+		fill = 0.35
 	}
-	pill = b.Animate("pill", pill, 160*time.Millisecond)
 	fill = b.Animate("fill", fill, 120*time.Millisecond)
-	outline := b.Animate("ring", unit(on), 160*time.Millisecond)
 	drop := b.Animate("drop", unit(pic || carry), 120*time.Millisecond)
 	sink := b.Animate("sink", unit(pressed && !dragged), 80*time.Millisecond)
 	// The ring grows in and out as work starts and stops, following how
@@ -949,45 +949,47 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 			// Where the square dragged goes: before this one.
 			pt.Fill(ui.Rect{X: r.X + (r.W-24)/2, Y: r.Y - 4, W: 24, H: 2}, p.accent, 1)
 		}
-		if pill > 0.5 {
-			// Along the rail's edge, as the activity bar marks the view
-			// shown.
-			pc := p.muted
-			if on {
-				pc = p.accent
-			}
-			pt.Fill(ui.Rect{X: r.X - 2, Y: r.Y + (r.H-pill)/2, W: 5, H: pill}, pc, 2.5)
-		}
 		s := float32(railSquare) - 2*sink
 		sq := ui.Rect{X: r.X + 1, Y: r.Y + (r.H-s)/2, W: max(r.W-2, s), H: s}
 		alpha := float32(1)
 		if dragged {
 			alpha = 0.4
 		}
-		pt.Fill(sq, col.Alpha(fill*alpha), railRadius)
-		if outline > 0.01 {
-			pt.Stroke(sq, col.Alpha(0.75*outline*alpha), railRadius, 1.25)
-		}
+		// The row shown is the window's chosen row, under a ring of its
+		// accent, not a slab of the project's color.
+		wash := p.active.Alpha(fill * alpha)
+		pt.Fill(sq, wash, railRadius)
+
 		if drop > 0.01 {
 			// A picture dropped here would show in it.
 			pt.Fill(sq, p.accent.Alpha(0.14*drop), railRadius)
 			pt.Stroke(ui.Rect{X: sq.X - 2, Y: sq.Y - 2, W: sq.W + 4, H: sq.H + 4}, p.accent.Alpha(drop), railRadius+2, 1.5)
 		}
 		// The name reads as text of the window, not in the project's
-		// color: a square is a shade of that color, too faint for it.
+		// color, which is too faint for it: full for the project shown,
+		// a step back for the others.
 		ink := p.text
-		if dragged {
+		switch {
+		case dragged:
 			ink = p.muted
+		case !on:
+			ink = p.text.Mix(p.muted, 0.35)
 		}
-		// A project with a logo of its own shows it in the column left of
-		// its name, which lines the names up.
+		// The mark of the project at the left of its name: its logo, or
+		// its initials on a wash of its color, which keeps each project
+		// apart without a slab across the rail.
+		ms := min(sq.H-8, float32(railLogo))
+		chip := ui.Rect{X: sq.X + 7, Y: sq.Y + (sq.H-ms)/2, W: ms, H: ms}
 		if src := h.logoSrc; src != nil && own == "" && !dragged {
-			ls := min(sq.H-8, float32(railLogo))
-			logo := ui.Rect{X: sq.X + 7, Y: sq.Y + (sq.H-ls)/2, W: ls, H: ls}
-			pt.Clip(logo, 4, func() { pt.Image(src, logo, ui.Contain) })
+			pt.Clip(chip, 4, func() { pt.Image(src, chip, ui.Contain) })
+		} else {
+			pt.Fill(chip, col.Alpha(0.2*alpha), 5)
+			// A folder named .something reads by its first letter,
+			// not by the dot before it.
+			paintInitials(pt, chip, strings.TrimLeft(label, "._- "), ms*0.5, col.Alpha(alpha))
 		}
 		l := labelShape(label, railNameSize-1)
-		at := sq.X + 8 + railTextLead
+		at := chip.X + chip.W + 7
 		pt.Glyphs(l.glyphs, at, sq.Y+sq.H/2+l.mid, ink.Alpha(alpha))
 		if conn != "" {
 			// At the corner the dots leave, cut out as they are, the
