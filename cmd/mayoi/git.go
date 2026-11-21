@@ -87,9 +87,11 @@ type gitState struct {
 
 	// history is the last commits of HEAD, newest first, and unpushed
 	// those its upstream lacks, read for the state historyOf names;
-	// historyN is how many to read, historyGen counts the reads.
+	// historyN is how many to read, historyGen counts the reads, and
+	// historyStat the lines the commits changed, read with them.
 	history        []git.Commit
 	unpushed       map[string]bool
+	historyStat    git.FileStat
 	historyOf      string
 	historyN       int
 	historyGen     int
@@ -437,6 +439,41 @@ func (a *gitContext) refreshHistory() {
 			}
 			g.history, g.unpushed = cs, unpushed
 			g.historyGen++
+			// A history with no commit has no lines, nor one whose lines
+			// could not be read.
+			g.historyStat = git.FileStat{}
+		})
+		// The commits show at once; the lines they changed are counted after,
+		// as reading them takes longer than the log that names them.
+		if err != nil || len(cs) == 0 {
+			return
+		}
+		var stats map[string]git.CommitStat
+		var statErr error
+		readGit(func() { stats, statErr = r.HistoryStat(n, all) })
+		a.app.post(func() {
+			if g.repo != r || g.historyOf != key || statErr != nil {
+				return
+			}
+			var st git.FileStat
+			for _, one := range stats {
+				st.Added += one.Added
+				st.Deleted += one.Deleted
+			}
+			g.historyStat = st
+			// The lines of a commit of the history are known now: the card
+			// that shows it need not read them again.
+			if a.scm == nil {
+				return
+			}
+			if a.scm.commitStats == nil {
+				a.scm.commitStats = map[string]*commitStatRead{}
+			}
+			for h, one := range stats {
+				if _, ok := a.scm.commitStats[h]; !ok {
+					a.scm.commitStats[h] = &commitStatRead{stat: one}
+				}
+			}
 		})
 	})
 }

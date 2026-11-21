@@ -75,6 +75,68 @@ func TestScmCountsBranchesAndWorktrees(t *testing.T) {
 	hs.shot("scm-counts")
 }
 
+// The commits' heading sums the lines every commit it lists changed, as
+// the headings of the changes sum theirs, and says so as commits come.
+func TestScmCountsTheLinesOfTheCommits(t *testing.T) {
+	hs := newHarness(t, false)
+	gitc := hs.gitRepo()
+	// A commit that changes a line: one gained and one lost.
+	os.WriteFile(hs.path("main.go"), []byte("package main\n\nimport \"fmt\"\n\n// main says hello.\nfunc main() {\n\tfmt.Println(\"hi, mayoi\")\n}\n"), 0o644)
+	gitc("add", ".")
+	gitc("commit", "-q", "-m", "greet again")
+	hs.a.run("view.scm")
+	hs.settleGit()
+	a, ctx := hs.a, hs.a.repository()
+	var want git.FileStat
+	for range 5 {
+		want = historyLines(t, ctx, a.git.history)
+		if got := ctx.groupStat(groupCommits); got == want {
+			break
+		}
+		hs.settle()
+	}
+	if want.Added == 0 || want.Deleted == 0 {
+		t.Fatalf("the commits change no line both ways: %+v", want)
+	}
+	if got := ctx.groupStat(groupCommits); got != want {
+		t.Fatalf("the commits add up to %+v, want %+v", got, want)
+	}
+	for _, s := range []string{fmt.Sprintf("+%d", want.Added), fmt.Sprintf("−%d", want.Deleted)} {
+		if !hs.tt.HasText(s) {
+			t.Errorf("%q is not beside the count of the commits: %q", s, hs.tt.Texts())
+		}
+	}
+	hs.shot("scm-commits-lines")
+	// A commit made now adds its lines to the total.
+	os.WriteFile(hs.path("notes.txt"), []byte("one\ntwo\nthree\n"), 0o644)
+	gitc("add", ".")
+	gitc("commit", "-q", "-m", "notes")
+	hs.settleGit()
+	want = historyLines(t, ctx, a.git.history)
+	if got := ctx.groupStat(groupCommits); got != want {
+		t.Fatalf("after a commit the commits add up to %+v, want %+v", got, want)
+	}
+	if plus := fmt.Sprintf("+%d", want.Added); !hs.tt.HasText(plus) {
+		t.Errorf("a commit made now did not add its lines: %q is not in %q", plus, hs.tt.Texts())
+	}
+}
+
+// historyLines adds up what each commit of a history changed, as the
+// heading of the commits does.
+func historyLines(t *testing.T, ctx *gitContext, cs []git.Commit) git.FileStat {
+	t.Helper()
+	var st git.FileStat
+	for _, c := range cs {
+		one, err := ctx.git.repo.CommitStat(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		st.Added += one.Added
+		st.Deleted += one.Deleted
+	}
+	return st
+}
+
 // The worktrees the box lists say how many files each has uncommitted, so
 // which of them is still being worked in shows.
 func TestWorktreePickerCountsUncommittedFiles(t *testing.T) {

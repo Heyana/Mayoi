@@ -258,8 +258,12 @@ func (a *gitContext) scmRows() []scmRow {
 }
 
 // groupStat adds up the lines the files of a group gained and lost: those
-// of the changes, staged and not, and of the files Git does not track yet.
+// of the changes, staged and not, of the files Git does not track yet, and
+// of the commits of the history.
 func (a *gitContext) groupStat(g scmGroup) git.FileStat {
+	if g == groupCommits {
+		return a.git.historyStat
+	}
 	var st git.FileStat
 	for _, e := range a.groupEntries()[g] {
 		if s, ok := a.git.workStat[e.Path]; ok {

@@ -1071,6 +1071,62 @@ func (r *Repo) CommitStat(c Commit) (CommitStat, error) {
 	return parseNumstat(string(out)), nil
 }
 
+// HistoryStat returns how much each of the last n commits of HEAD's
+// history changed from its first parent, or from before the first commit,
+// by hash: what CommitStat counts for the commits Log reads, in one git.
+// A merge's changes are those against its first parent, counted once; a
+// rename counts as one file, and a binary file's lines as none.
+func (r *Repo) HistoryStat(n int, all bool) (map[string]CommitStat, error) {
+	args := []string{"log", "--date-order", "-n", strconv.Itoa(n), "-M", "-m", "--numstat", "--format=COMMIT %H", "HEAD"}
+	if all {
+		args = append(args, "--branches", "--remotes", "--tags")
+	}
+	out, err := r.run(nil, append(args, "--")...)
+	if err != nil {
+		// Before the first commit HEAD names none: no history, no error.
+		if r.Head() == "" {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return parseHistoryNumstat(string(out)), nil
+}
+
+// parseHistoryNumstat reads git log's --numstat, "COMMIT <hash>" heading
+// the lines of a commit and "added\tdeleted\tpath" under it. Git prints
+// a merge's changes against each of its parents under a heading of its
+// own: only the first, against the first parent, is counted.
+func parseHistoryNumstat(out string) map[string]CommitStat {
+	stats := make(map[string]CommitStat)
+	cur, skip := "", true
+	for _, line := range strings.Split(out, "\n") {
+		if h, ok := strings.CutPrefix(line, "COMMIT "); ok {
+			cur, skip = strings.TrimSpace(h), false
+			if _, seen := stats[cur]; seen || cur == "" {
+				skip = true
+				continue
+			}
+			stats[cur] = CommitStat{}
+			continue
+		}
+		if skip {
+			continue
+		}
+		f := strings.SplitN(line, "\t", 3)
+		if len(f) < 3 {
+			continue
+		}
+		st := stats[cur]
+		st.Files++
+		add, _ := strconv.Atoi(f[0])
+		del, _ := strconv.Atoi(f[1])
+		st.Added += add
+		st.Deleted += del
+		stats[cur] = st
+	}
+	return stats
+}
+
 // EmptyTree is the hash of Git's empty tree, the side a change from
 // before the first commit is compared against.
 const EmptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
