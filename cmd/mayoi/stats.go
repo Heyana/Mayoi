@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"sync"
 	"time"
@@ -10,6 +13,7 @@ import (
 
 	"mayoi/internal/bg"
 	"mayoi/internal/git"
+	"mayoi/internal/settings"
 	"mayoi/locales"
 )
 
@@ -21,16 +25,35 @@ var statSpanLong = [statSpans]time.Duration{24 * time.Hour, 7 * 24 * time.Hour, 
 
 // statsEvery is how often the panel reads the commits again while it is
 // open: a day's window slides, and a commit made while it shows belongs in
-// it.
-const statsEvery = 5 * time.Minute
+// it. Reading again reads only what was committed since the last read, so
+// it comes cheap.
+const statsEvery = time.Minute
 
 // statsAmount is a count of commits, and of the lines they added and
 // deleted.
 type statsAmount struct {
 	Commits, Added, Removed int
-	// Lines is whether the lines were read: the counts come first, as they
-	// take a moment, the lines after, as a month of diffs takes seconds.
+	// Lines is whether the lines were read: with nothing read before, the
+	// counts come first, as they read no diff, the lines after.
 	Lines bool
+}
+
+// statCommit is one commit as the panel counts it: when it was made, and the
+// lines it added and deleted.
+type statCommit struct {
+	When    time.Time `json:"when"`
+	Added   int       `json:"added"`
+	Removed int       `json:"removed"`
+}
+
+// statRead is the commits one project made within the longest span, as the
+// panel read them last. Reading them again then reads only those made since,
+// and a panel opened again has its numbers before Git runs at all.
+type statRead struct {
+	Dir     string       `json:"dir"`
+	At      time.Time    `json:"at"`
+	Head    string       `json:"head"`
+	Commits []statCommit `json:"commits"`
 }
 
 // statsRow is one project's commits over the spans: those its own identity
@@ -51,6 +74,11 @@ type statsState struct {
 	busy bool
 	gen  int
 	rows []statsRow
+	// reads is what each project's commits were read as, so that a read
+	// only counts what was committed since, and its numbers outlive a
+	// restart.
+	reads  map[string]*statRead
+	loaded bool
 }
 
 // toggle opens or closes the panel, reading the commits as it opens.
@@ -62,17 +90,17 @@ func (st *statsState) toggle() {
 }
 
 // read fills the rows from what each project's own identity committed since
-// the longest span, once they are stale: the projects of the rail, in its
-// order, or by how recently each committed.
+// the longest span: the projects of the rail, in its order, or by how
+// recently each committed.
 //
-// The counts come first and show at once: a repository of thousands of
-// commits answers how many quickly, as it reads no diff. The lines of those
-// commits follow, as reading a month of diffs takes seconds.
+// What was read last shows at once, and only what was committed since is
+// read again: a month of diffs is read once, not on every opening.
 func (st *statsState) read(now time.Time) {
 	f := st.f
-	if f == nil || st.busy || (!st.at.IsZero() && now.Sub(st.at) < statsEvery) {
+	if f == nil || st.busy {
 		return
 	}
+	st.load()
 	wins := f.m.s.InRail()
 	var dirs, names []string
 	for _, w := range wins {
@@ -88,96 +116,244 @@ func (st *statsState) read(now time.Time) {
 	}
 	manual := f.m.s.RailOrder == "manual"
 	post, draw := f.active.a.post, f.active.a.invalidate
-	st.busy, st.gen = true, st.gen+1
-	gen := st.gen
-	rows := make([]statsRow, len(dirs))
+	// The numbers of the last read show before this one answers, and a
+	// read that ran a moment ago is not run again.
+	if len(st.reads) > 0 && len(st.rows) == 0 {
+		st.rows = st.rowsOf(dirs, names, manual, now)
+		draw()
+	}
+	if !st.at.IsZero() && now.Sub(st.at) < statsEvery {
+		return
+	}
+	gen := st.gen + 1
+	st.busy, st.gen = true, gen
+	reads := make([]*statRead, len(dirs))
 	// Each project reads on its own: a repository of thousands of commits
-	// takes seconds, and the others must not wait for it.
-	read := func(wg *sync.WaitGroup, each func(i int)) {
+	// takes a moment, and the others must not wait for it.
+	bg.Go(func() {
+		var wg sync.WaitGroup
+		if len(st.reads) == 0 {
+			// Nothing was read before: the counts of the commits come
+			// first, as they read no diff, and the lines follow.
+			counts := countsOf(dirs, names, manual, now)
+			post(func() {
+				if st.gen == gen && len(st.rows) == 0 {
+					st.rows = counts
+				}
+				draw()
+			})
+		}
 		for i := range dirs {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				each(i)
+				reads[i] = st.readOne(dirs[i], now)
 			}(i)
 		}
-	}
-	inOrder := func() {
-		if manual {
-			return
+		wg.Wait()
+		next := make(map[string]*statRead, len(st.reads)+len(reads))
+		for dir, r := range st.reads {
+			next[dir] = r
 		}
-		slices.SortStableFunc(rows, func(a, b statsRow) int { return b.latest.Compare(a.latest) })
-	}
-	bg.Go(func() {
-		var wg sync.WaitGroup
-		read(&wg, func(i int) { rows[i] = countOf(dirs[i], names[i], now) })
-		wg.Wait()
-		inOrder()
-		post(func() {
-			if st.gen == gen {
-				st.rows = slices.Clone(rows)
+		for _, r := range reads {
+			if r != nil {
+				next[r.Dir] = r
 			}
-		})
-		draw()
-		// The lines of those commits read next, over the counts shown.
-		read(&wg, func(i int) { rows[i] = linesOf(rows[i], now) })
-		wg.Wait()
-		inOrder()
+		}
 		post(func() {
 			if st.gen != gen {
 				return
 			}
-			st.at, st.busy, st.rows = time.Now(), false, slices.Clone(rows)
+			st.reads = next
+			st.at, st.busy = now, false
+			st.rows = st.rowsOf(dirs, names, manual, now)
 		})
 		draw()
+		st.save(next)
 	})
 }
 
-// countOf is how many commits one project's own identity made since the
-// longest span, counted over each span too.
-func countOf(dir, name string, now time.Time) statsRow {
-	row := statsRow{dir: dir, name: name}
-	r, err := git.Open(dir)
-	if err != nil {
-		return row
+// countsOf is what the panel shows before it reads a diff: how many each
+// project committed over each span.
+func countsOf(dirs, names []string, manual bool, now time.Time) []statsRow {
+	rows := make([]statsRow, len(dirs))
+	var wg sync.WaitGroup
+	for i := range dirs {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			rows[i].dir, rows[i].name = dirs[i], names[i]
+			r, err := git.Open(dirs[i])
+			if err != nil {
+				return
+			}
+			rows[i].latest = r.HeadTime()
+			me := r.Identity()
+			for s := 0; s < statSpans; s++ {
+				if n, err := r.CountSince(now.Add(-statSpanLong[s]), me); err == nil {
+					rows[i].count[s].Commits = n
+				}
+			}
+		}(i)
 	}
-	row.latest = r.HeadTime()
-	me := r.Identity()
-	for s := 0; s < statSpans; s++ {
-		if n, err := r.CountSince(now.Add(-statSpanLong[s]), me); err == nil {
-			row.count[s].Commits = n
-		}
+	wg.Wait()
+	if !manual {
+		slices.SortStableFunc(rows, func(a, b statsRow) int { return b.latest.Compare(a.latest) })
 	}
-	return row
+	return rows
 }
 
-// linesOf is the lines the commits of row added and deleted, counted over
-// each span too, its count of them kept as it was.
-func linesOf(row statsRow, now time.Time) statsRow {
-	r, err := git.Open(row.dir)
+// readOne reads what one project committed: only what it committed since it
+// was last read, as long as the branch still holds the commits it had then,
+// and a month of diffs otherwise, which a rewritten branch needs.
+func (st *statsState) readOne(dir string, now time.Time) *statRead {
+	old := st.reads[dir]
+	r, err := git.Open(dir)
 	if err != nil {
-		return row
+		return old
 	}
-	cs, err := r.CommitsSince(now.Add(-statSpanLong[statSpans-1]), r.Identity())
-	if err != nil {
-		return row
+	since := now.Add(-statSpanLong[statSpans-1])
+	me := r.Identity()
+	out := &statRead{Dir: dir, At: now, Head: r.Head()}
+	if old != nil && !old.At.IsZero() && r.Holds(old.Head) {
+		// By where the commits are, not by when they are dated: one
+		// dated before the read before still counts, as an amend or a
+		// rebased commit is.
+		if cs, err := r.CommitsBetween(old.Head, "HEAD", me); err == nil {
+			out.Commits = append(out.Commits, within(old.Commits, since)...)
+			out.Commits = append(out.Commits, made(cs, since)...)
+			return tidy(out)
+		}
 	}
-	for _, c := range cs {
-		if row.latest.Before(c.When) {
-			row.latest = c.When
+	if cs, err := r.CommitsSince(since, me); err == nil {
+		out.Commits = made(cs, since)
+	}
+	return tidy(out)
+}
+
+// rowsOf is the rows of the panel as the commits it read for these projects
+// count over each span.
+func (st *statsState) rowsOf(dirs, names []string, manual bool, now time.Time) []statsRow {
+	rows := make([]statsRow, len(dirs))
+	for i, dir := range dirs {
+		rows[i].dir, rows[i].name = dir, names[i]
+		read := st.reads[dir]
+		if read == nil {
+			continue
+		}
+		for _, c := range read.Commits {
+			if rows[i].latest.Before(c.When) {
+				rows[i].latest = c.When
+			}
+			for s := 0; s < statSpans; s++ {
+				if c.When.After(now.Add(-statSpanLong[s])) {
+					rows[i].count[s].Commits++
+					rows[i].count[s].Added += c.Added
+					rows[i].count[s].Removed += c.Removed
+				}
+			}
 		}
 		for s := 0; s < statSpans; s++ {
-			if !c.When.After(now.Add(-statSpanLong[s])) {
-				continue
-			}
-			row.count[s].Added += c.Added
-			row.count[s].Removed += c.Deleted
+			rows[i].count[s].Lines = true
 		}
 	}
-	for s := 0; s < statSpans; s++ {
-		row.count[s].Lines = true
+	if !manual {
+		slices.SortStableFunc(rows, func(a, b statsRow) int { return b.latest.Compare(a.latest) })
 	}
-	return row
+	return rows
+}
+
+// within are the commits of cs still inside the span ending now.
+func within(cs []statCommit, since time.Time) []statCommit {
+	kept := cs[:0]
+	for _, c := range cs {
+		if c.When.After(since) {
+			kept = append(kept, c)
+		}
+	}
+	return kept
+}
+
+// made are the commits of cs made from when on.
+func made(cs []git.Committed, from time.Time) []statCommit {
+	out := make([]statCommit, 0, len(cs))
+	for _, c := range cs {
+		if !c.When.Before(from) {
+			out = append(out, statCommit{When: c.When, Added: c.Added, Removed: c.Deleted})
+		}
+	}
+	return out
+}
+
+// tidy puts the commits of a read in order, drops the ones the same commit
+// gave twice, and drops those that fell out of the month.
+func tidy(r *statRead) *statRead {
+	slices.SortFunc(r.Commits, func(a, b statCommit) int { return a.When.Compare(b.When) })
+	r.Commits = slices.CompactFunc(r.Commits, func(a, b statCommit) bool {
+		return a.When.Equal(b.When) && a.Added == b.Added && a.Removed == b.Removed
+	})
+	return r
+}
+
+// statsPath is the file the panel keeps the commits it read in, beside the
+// settings of the editor.
+func (st *statsState) statsPath() string {
+	if st.f == nil || st.f.m == nil {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(st.f.m.s.Path()), "stats-cache.json")
+}
+
+// load reads what the panel counted last time it ran, once.
+func (st *statsState) load() {
+	if st.loaded {
+		return
+	}
+	st.loaded = true
+	b, err := os.ReadFile(st.statsPath())
+	if err != nil {
+		return
+	}
+	var in struct {
+		Projects []*statRead `json:"projects"`
+	}
+	if json.Unmarshal(b, &in) != nil {
+		return
+	}
+	st.reads = make(map[string]*statRead, len(in.Projects))
+	for _, r := range in.Projects {
+		if r != nil && r.Dir != "" {
+			st.reads[r.Dir] = r
+		}
+	}
+}
+
+// save writes the commits a read found for the next run to show at once,
+// beside the settings of the editor.
+func (st *statsState) save(reads map[string]*statRead) {
+	if st.f == nil || len(reads) == 0 {
+		return
+	}
+	projects := make([]*statRead, 0, len(reads))
+	for _, r := range reads {
+		projects = append(projects, r)
+	}
+	slices.SortFunc(projects, func(a, b *statRead) int {
+		if a.Dir < b.Dir {
+			return -1
+		}
+		if a.Dir > b.Dir {
+			return 1
+		}
+		return 0
+	})
+	b, err := json.Marshal(struct {
+		Projects []*statRead `json:"projects"`
+	}{projects})
+	if err != nil {
+		return
+	}
+	_ = settings.WriteFile(st.statsPath(), b)
 }
 
 // statSpanName is the name of a span over its column.
@@ -220,7 +396,7 @@ func (a *app) statsView(c *ui.Context) {
 				ui.Row(c).Padding(11, 14).Gap(10).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
 					ui.Icon(c, iconStats).FontSize(14).TextColor(p.muted)
 					ui.Text(c, locales.StatsTitle()).FontSize(13.5).TextColor(p.text).Grow(1).Basis(0).MinWidth(0).SingleLine()
-					if st.busy {
+					if st.busy && len(st.rows) == 0 {
 						ui.Text(c, locales.StatsReading()).FontSize(11.5).TextColor(p.faint).Shrink(0).SingleLine()
 					}
 					if a.smallButton(c, iconX, locales.QuickClose()) {

@@ -35,6 +35,7 @@ needs a `## <version>` section here, or its build fails.
 - `mayoi projects` lists the projects of the rail, adds folders to it, and removes them, so a script or an agent can register its own projects.
 - A button beside the title bar's opens a panel of recent commits: what each project of the rail committed itself over the last day, week and month, with the lines those commits added and deleted, and the total of every project at its end. Commits of others are left out. The counts read first, as they need no diff of a commit, and the lines follow; Git is read again every five minutes while the panel is open.
 - The panel of recent commits sets every column on one line: the spans' names, each project's lines and the total share one height and one left edge, and a project's line lights under the pointer.
+- The panel of recent commits reads a month of commits once and only what was committed since after that, and keeps what it read beside the settings, so a panel opened again has its numbers before Git runs.
 - `mayoi projects list` says each project's label beside its folder, and `mayoi projects label` and `unlabel` name a project on the rail.
 - The Markdown Reading view shows an HTML `<table>` as a table, with its cells' alignment and pictures.
 - HTML `<ul>`, `<ol>` and `<li>` show as lists in the Reading view, nested and numbered.

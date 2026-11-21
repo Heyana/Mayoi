@@ -587,6 +587,17 @@ func (r *Repo) Head() string {
 	return strings.TrimSpace(string(out))
 }
 
+// Holds tells whether HEAD descends from commit, whose hash may be empty
+// for a repository it was never read from: what reading only the commits
+// made since needs of a branch that was not rewritten under it.
+func (r *Repo) Holds(commit string) bool {
+	if commit == "" {
+		return false
+	}
+	_, err := r.run(nil, "merge-base", "--is-ancestor", commit, "HEAD")
+	return err == nil
+}
+
 // Count returns how many commits to has that from has not.
 func (r *Repo) Count(from, to string) int {
 	out, err := r.run(nil, "rev-list", "--count", from+".."+to)
@@ -1219,12 +1230,30 @@ type Committed struct {
 // thousands of commits costs seconds for them, and a rename adds no lines
 // of its own that a person sees as work.
 func (r *Repo) CommitsSince(when time.Time, author string) ([]Committed, error) {
-	args := []string{"log", "--since=" + when.Format(time.RFC3339), "--no-renames", "--no-merges",
-		"--format=COMMIT %ct", "--numstat"}
+	return r.committed(append([]string{"--since=" + when.Format(time.RFC3339)}, logArgs(author)...)...)
+}
+
+// CommitsBetween are the commits the branch made on top of from, newest
+// first: what reading only the commits made since a read last ran needs, as
+// it finds them by where they are rather than by when they are dated, and
+// a commit dated before that read still counts.
+func (r *Repo) CommitsBetween(from, to, author string) ([]Committed, error) {
+	return r.committed(append(logArgs(author), from+".."+to)...)
+}
+
+// logArgs are the arguments of a read of commits, without which commits.
+func logArgs(author string) []string {
+	args := []string{"--no-renames", "--no-merges", "--format=COMMIT %ct", "--numstat"}
 	if author != "" {
 		args = append(args, "--author="+author)
 	}
-	out, err := r.run(nil, args...)
+	return args
+}
+
+// committed are the commits git log names with args, with the lines each
+// added and deleted.
+func (r *Repo) committed(args ...string) ([]Committed, error) {
+	out, err := r.run(nil, append([]string{"log"}, args...)...)
 	if err != nil {
 		return nil, err
 	}

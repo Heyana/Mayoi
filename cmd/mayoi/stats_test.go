@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // gitAt runs git in dir as a commit at when, for the commits made before
@@ -93,4 +95,75 @@ func TestStatsCountsTheCommitsOfEachProject(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+// The panel reads a month of commits once: opening it again reads only what
+// was committed since the read before, and its numbers are still there for
+// the next run before Git answers.
+func TestStatsReadsOnlyWhatWasCommittedSinceTheReadBefore(t *testing.T) {
+	hs := newHarness(t, true)
+	hs.gitRepo()
+	dir := filepath.Join(t.TempDir(), "since")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	gitAt(t, dir, time.Time{}, "init", "-q", "-b", "main")
+	gitAt(t, dir, time.Time{}, "config", "user.email", "t@t")
+	writeLines(t, filepath.Join(dir, "README.md"), 3)
+	gitAt(t, dir, now.Add(-2*time.Hour), "add", "README.md")
+	gitAt(t, dir, now.Add(-2*time.Hour), "commit", "-q", "-m", "first")
+
+	f, _, tt := railFixture(t, hs.root, dir)
+	f.stats.toggle()
+	waitFor(t, tt, &f.stats.busy)
+	if got := findRow(t, f.stats.rows, dir).count[0].Commits; got != 1 {
+		t.Fatalf("the project counts %d commits over the day, want 1", got)
+	}
+
+	// One more, after the read: reading only what came since finds it.
+	writeLines(t, filepath.Join(dir, "README.md"), 5)
+	gitAt(t, dir, now.Add(-time.Hour), "commit", "-q", "-a", "-m", "second")
+	f.stats.at = time.Time{}
+	f.stats.read(time.Now())
+	waitFor(t, tt, &f.stats.busy)
+	row := findRow(t, f.stats.rows, dir)
+	for s := 0; s < statSpans; s++ {
+		if got := row.count[s].Commits; got != 2 {
+			t.Fatalf("the project counts %d commits after a read of what came since, want 2", got)
+		}
+	}
+	if got := row.count[2].Added; got != 5 {
+		t.Fatalf("its commits added %d lines, want 5: the one read before is kept", got)
+	}
+	// What it read lives beside the settings: the next run shows it before
+	// Git runs at all.
+	f.stats.rows, f.stats.reads, f.stats.loaded = nil, nil, false
+	f.stats.load()
+	back := f.stats.rowsOf([]string{dir}, []string{"since"}, false, now)
+	if got := findRow(t, back, dir).count[2].Commits; got != 2 {
+		t.Fatalf("the panel shows %d commits of the project it read before, want 2: they are kept across runs", got)
+	}
+}
+
+// waitFor steps the window until the panel is done reading.
+func waitFor(t *testing.T, tt *ui.Tester, busy *bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for *busy && time.Now().Before(deadline) {
+		step(tt)
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// findRow is the line of the panel for dir.
+func findRow(t *testing.T, rows []statsRow, dir string) statsRow {
+	t.Helper()
+	for _, r := range rows {
+		if r.dir == dir {
+			return r
+		}
+	}
+	t.Fatalf("the panel lists no line for %s", dir)
+	return statsRow{}
 }
