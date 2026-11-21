@@ -1102,16 +1102,12 @@ func (r *Repo) WorkNumstat() (map[string]FileStat, error) {
 	out, err := r.run(nil, "diff", "--numstat", "-z", "-M", "HEAD", "--")
 	if err != nil {
 		// Before the first commit, the changes are against the empty tree,
-		// which is no HEAD: the staged ones, then the unstaged.
-		out, err = r.run(nil, "diff", "--numstat", "-z", "-M", "--cached", "--")
+		// which covers staged and unstaged edits together without one
+		// overwriting the other.
+		out, err = r.run(nil, "diff", "--numstat", "-z", "-M", EmptyTree, "--")
 		if err != nil {
 			return nil, err
 		}
-		unstaged, err := r.run(nil, "diff", "--numstat", "-z", "-M", "--")
-		if err != nil {
-			return nil, err
-		}
-		out = append(append(out, '\x00'), unstaged...)
 	}
 	stat := r.absNumstat(parseNumstatFiles(out))
 	others, err := r.run(nil, "ls-files", "--others", "--exclude-standard", "-z")
@@ -1219,6 +1215,7 @@ func (r *Repo) HeadTime() time.Time {
 // Committed is one commit of the branch, and the lines it added and
 // deleted.
 type Committed struct {
+	Hash           string
 	When           time.Time
 	Added, Deleted int
 }
@@ -1243,9 +1240,9 @@ func (r *Repo) CommitsBetween(from, to, author string) ([]Committed, error) {
 
 // logArgs are the arguments of a read of commits, without which commits.
 func logArgs(author string) []string {
-	args := []string{"--no-renames", "--no-merges", "--format=COMMIT %ct", "--numstat"}
+	args := []string{"--no-renames", "--no-merges", "--format=COMMIT %H %ct", "--numstat"}
 	if author != "" {
-		args = append(args, "--author="+author)
+		args = append(args, "--fixed-strings", "--author="+author)
 	}
 	return args
 }
@@ -1261,11 +1258,15 @@ func (r *Repo) committed(args ...string) ([]Committed, error) {
 	for _, line := range strings.Split(string(out), "\n") {
 		switch {
 		case strings.HasPrefix(line, "COMMIT "):
-			sec, err := strconv.ParseInt(strings.TrimSpace(line[len("COMMIT "):]), 10, 64)
+			parts := strings.Fields(line[len("COMMIT "):])
+			if len(parts) < 2 {
+				continue
+			}
+			sec, err := strconv.ParseInt(parts[1], 10, 64)
 			if err != nil {
 				continue
 			}
-			stats = append(stats, Committed{When: time.Unix(sec, 0)})
+			stats = append(stats, Committed{Hash: parts[0], When: time.Unix(sec, 0)})
 		case strings.Contains(line, "\t"):
 			if len(stats) == 0 {
 				continue
@@ -1288,9 +1289,9 @@ func (r *Repo) committed(args ...string) ([]Committed, error) {
 // author if one is given: it reads no diff, and answers in a moment a
 // month of commits.
 func (r *Repo) CountSince(when time.Time, author string) (int, error) {
-	args := []string{"rev-list", "--count", "--since=" + when.Format(time.RFC3339)}
+	args := []string{"rev-list", "--count", "--no-merges", "--since=" + when.Format(time.RFC3339)}
 	if author != "" {
-		args = append(args, "--author="+author)
+		args = append(args, "--fixed-strings", "--author="+author)
 	}
 	out, err := r.run(nil, append(args, "HEAD")...)
 	if err != nil {

@@ -146,7 +146,7 @@ func (a *app) diffPaneUI(c *ui.Context, v *diffView) {
 			return
 		}
 		// Another file shows now: its lines, not the one left.
-		v.preview, v.markdown = false, nil
+		v.stopMarkdown()
 	}
 	lineH, charW := f.lineH, f.charW
 	view := v.pane.Bounds(c)

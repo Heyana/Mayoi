@@ -1,8 +1,10 @@
 package git
 
 import (
+	"os/exec"
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestParseCoAuthors(t *testing.T) {
@@ -98,5 +100,81 @@ func TestWorkNumstat(t *testing.T) {
 	}
 	if got := stat[r.Abs("a.txt")]; got.Added != 2 || got.Deleted != 1 {
 		t.Fatalf("a.txt staged: %+v, want +2 −1", got)
+	}
+}
+
+// Before the first commit, a file with both staged and unstaged changes
+// keeps all of its lines rather than losing the staged ones.
+func TestWorkNumstatBeforeFirstCommit(t *testing.T) {
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("init", "-q", "-b", "main")
+	r, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, r.Root, "a.txt", "one\ntwo\n")
+	run("add", "a.txt")
+	write(t, r.Root, "a.txt", "one\ntwo\nthree\n")
+	stat, err := r.WorkNumstat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stat[r.Abs("a.txt")]; got.Added != 3 || got.Deleted != 0 {
+		t.Fatalf("a.txt unborn: %+v, want +3", got)
+	}
+}
+
+// CountSince and CommitsSince match the same non-merge commits, and treat
+// an author's email as fixed text rather than a regular expression.
+func TestCommitsAndCountSinceMatch(t *testing.T) {
+	r, git := repo(t)
+	runAs := func(email string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", r.Root, "-c", "user.email=" + email, "-c", "user.name=ab"}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("config", "user.email", "a+b@x.io")
+	git("config", "user.name", "ab")
+	write(t, r.Root, "a.txt", "one\ntwo\n")
+	runAs("a+b@x.io", "add", "a.txt")
+	runAs("a+b@x.io", "commit", "-q", "-m", "plus")
+	// Without --fixed-strings, regex "a+b@x.io" matches "aab@x.io" and misses "a+b@x.io".
+	write(t, r.Root, "c.txt", "other\n")
+	runAs("aab@x.io", "add", "c.txt")
+	runAs("aab@x.io", "commit", "-q", "-m", "other")
+	runAs("a+b@x.io", "checkout", "-q", "-b", "side")
+	write(t, r.Root, "b.txt", "side\n")
+	runAs("a+b@x.io", "add", "b.txt")
+	runAs("a+b@x.io", "commit", "-q", "-m", "side")
+	runAs("a+b@x.io", "checkout", "-q", "main")
+	runAs("a+b@x.io", "merge", "--no-ff", "-q", "-m", "merge side", "side")
+
+	since := time.Now().Add(-time.Hour)
+	me := r.Identity()
+	if me != "a+b@x.io" {
+		t.Fatalf("identity = %q, want a+b@x.io", me)
+	}
+	cs, err := r.CommitsSince(since, me)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := r.CountSince(since, me)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cs) != 2 || n != len(cs) {
+		t.Fatalf("CommitsSince=%d (%+v), CountSince=%d, want 2", len(cs), cs, n)
+	}
+	if cs[0].Hash == "" {
+		t.Fatalf("missing commit hash: %+v", cs[0])
 	}
 }

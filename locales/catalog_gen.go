@@ -9404,16 +9404,6 @@ func (msgs Messages) RailSortActivity() string {
 	return Catalog.Format(msgs.locale, "railSortActivity", nil)
 }
 
-// StatsMineX says "Mine"
-// in the language the app shows.
-func StatsMineX() string { return In(i18n.Locale()).StatsMineX() }
-
-// StatsMineX says "Mine"
-// in the language of msgs.
-func (msgs Messages) StatsMineX() string {
-	return Catalog.Format(msgs.locale, "statsMineX", nil)
-}
-
 // StatsTotal says "All projects"
 // in the language the app shows.
 func StatsTotal() string { return In(i18n.Locale()).StatsTotal() }
@@ -9484,14 +9474,14 @@ func (msgs Messages) Stats30d() string {
 	return Catalog.Format(msgs.locale, "stats30d", nil)
 }
 
-// StatsCommits says "%d commits"
+// StatsCommits says "{count, plural, one {# commit} other {# commits}}"
 // in the language the app shows.
-func StatsCommits() string { return In(i18n.Locale()).StatsCommits() }
+func StatsCommits(count int) string { return In(i18n.Locale()).StatsCommits(count) }
 
-// StatsCommits says "%d commits"
+// StatsCommits says "{count, plural, one {# commit} other {# commits}}"
 // in the language of msgs.
-func (msgs Messages) StatsCommits() string {
-	return Catalog.Format(msgs.locale, "statsCommits", nil)
+func (msgs Messages) StatsCommits(count int) string {
+	return Catalog.Format(msgs.locale, "statsCommits", map[string]any{"count": count})
 }
 
 // RailSortManual says "The order you set · click to sort by what moved last"

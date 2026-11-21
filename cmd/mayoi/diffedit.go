@@ -323,7 +323,7 @@ func (a *app) revealDiffCaret(v *diffView, e *diffEdit) {
 	if row < 0 {
 		return
 	}
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	y := editorPadY + float32(v.tops[row])*lineH
 	h := float32(v.rows[row].h) * lineH
 	if v.split {
@@ -365,13 +365,13 @@ func (a *app) revealDiffCaret(v *diffView, e *diffEdit) {
 	if v.split {
 		textX += l.right()
 	}
-	x, _ := diffCaretX(a.font, clipLine(text), caret-s, l.cols[0], false)
+	x, _ := diffCaretX(a.diffFont, clipLine(text), caret-s, l.cols[0], false)
 	x += textX
 	switch {
 	case x < v.scroll.X+textX:
-		v.scroll.X = max(0, x-textX-4*a.font.charW)
+		v.scroll.X = max(0, x-textX-4*a.diffFont.charW)
 	case x > v.scroll.X+v.viewW-textPadR:
-		v.scroll.X = x - v.viewW + textPadR + 4*a.font.charW
+		v.scroll.X = x - v.viewW + textPadR + 4*a.diffFont.charW
 	}
 }
 
@@ -401,7 +401,7 @@ func (a *app) diffCaretAtPoint(v *diffView, e *diffEdit, x, y float32, extend bo
 		e = v.editing
 	}
 	wrap := v.built.wrap
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	// Where the row's text starts, and the row of a wrapped line y is in.
 	textX := l.textX
 	if v.split {
@@ -416,7 +416,7 @@ func (a *app) diffCaretAtPoint(v *diffView, e *diffEdit, x, y float32, extend bo
 	if r.new < len(f.new.lines) {
 		text = clipLine(f.new.lines[r.new])
 	}
-	col := diffCaretCol(a.font, text, x+v.scroll.X-textX, yInRow, lineH, l.cols[btoi(v.split)], wrap)
+	col := diffCaretCol(a.diffFont, text, x+v.scroll.X-textX, yInRow, lineH, l.cols[btoi(v.split)], wrap)
 	snap := e.doc.buf.Snapshot()
 	s, _ := snap.LineRange(min(r.new, snap.LineCount()-1))
 	e.diffCaretTo(s+col, extend)
@@ -750,7 +750,7 @@ func (e *diffEdit) diffEditedText() string {
 // side over its rows: what is selected, filled line by line, and a bar
 // where the caret is, as an editor shows them.
 func (a *app) paintDiffEdit(pt *ui.Painter, v *diffView, e *diffEdit, l diffGeometry, first, last int, r ui.Rect, focused bool) {
-	p, fnt := a.pal, a.font
+	p, fnt := a.pal, a.diffFont
 	file := slices.Index(v.files, e.f)
 	if file < 0 {
 		return
@@ -861,16 +861,16 @@ func (a *app) diffCaretRect(v *diffView, e *diffEdit, l diffGeometry) (ui.Rect, 
 	if line < len(e.f.new.lines) {
 		text = clipLine(e.f.new.lines[line])
 	}
-	x, k := diffCaretX(a.font, text, caret-s, l.cols[btoi(v.split)], v.built.wrap)
-	y := editorPadY + float32(v.tops[row])*a.font.lineH
+	x, k := diffCaretX(a.diffFont, text, caret-s, l.cols[btoi(v.split)], v.built.wrap)
+	y := editorPadY + float32(v.tops[row])*a.diffFont.lineH
 	x += l.textX
 	if v.split {
 		// The caret's line stands where the right side has it.
 		x += l.right()
 		y, _ = a.sideRowY(v, 1, row)
 	}
-	y += float32(k) * a.font.lineH
-	return ui.Rect{X: x - 1, Y: y, W: 3, H: a.font.lineH}, true
+	y += float32(k) * a.diffFont.lineH
+	return ui.Rect{X: x - 1, Y: y, W: 3, H: a.diffFont.lineH}, true
 }
 
 // diffChosenText returns the text of the line a diff has chosen, of the

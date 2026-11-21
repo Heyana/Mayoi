@@ -55,7 +55,7 @@ const railPad float32 = 2*railInset + 7 + railLogo + 7 + 8
 // railNameSize is the size of a project's name on its row, and railLogo the
 // side of the mark it shows before it.
 const (
-	railNameSize float32 = 13
+	railNameSize float32 = 12
 	railLogo     float32 = 20
 )
 
@@ -90,6 +90,10 @@ type frame struct {
 	hoverOn    *desktop
 	hoverSince time.Time
 	hoverWake  bool
+	// railWake and railTimer schedule at most one pending refresh tick for
+	// the rail's Git counts on this window.
+	railWake  bool
+	railTimer *time.Timer
 }
 
 // newFrame opens a window that shows h.
@@ -170,6 +174,10 @@ func (m *mayoi) newFrame(h *desktop) *frame {
 	// to open again, as do those the quitting closes. The others keep
 	// their folders' sessions.
 	win.OnClosed(func() {
+		if f.railTimer != nil {
+			f.railTimer.Stop()
+			f.railTimer = nil
+		}
 		m.frames = slices.DeleteFunc(m.frames, func(o *frame) bool { return o == f })
 		// A window whose projects moved to another has none left here.
 		for _, h := range f.tabs {
@@ -340,23 +348,59 @@ func (m *mayoi) front(h *desktop) {
 	m.s.Focused(h.a.window)
 }
 
+// post runs fn on the window's active app loop, falling back to the first
+// tab so background work for inactive tabs still completes.
+func (f *frame) post(fn func()) {
+	if f.active != nil {
+		f.active.a.post(fn)
+		return
+	}
+	if len(f.tabs) > 0 {
+		f.tabs[0].a.post(fn)
+	}
+}
+
+// invalidate requests a redraw on the window's active app.
+func (f *frame) invalidate() {
+	if f.active != nil {
+		f.active.a.invalidate()
+	} else if f.win != nil {
+		f.win.Invalidate()
+	}
+}
+
+// scheduleRailTick arranges a single window-wide redraw after
+// railChangesEvery so Git counts refresh without spawning a timer per project.
+func (f *frame) scheduleRailTick() {
+	if f.railWake || f.life != lifeOpen {
+		return
+	}
+	f.railWake = true
+	f.railTimer = time.AfterFunc(railChangesEvery, func() {
+		f.post(func() { f.railWake = false })
+		f.invalidate()
+	})
+}
+
 // stepProject shows the project by steps along the rail, around its ends.
 func (h *desktop) stepProject(by int) {
 	f := h.f
-	if n := len(f.tabs); n > 1 {
-		i := slices.Index(f.tabs, f.active)
-		f.activate(f.tabs[((i+by)%n+n)%n])
+	tabs := f.shownTabs()
+	if n := len(tabs); n > 1 {
+		i := slices.Index(tabs, f.active)
+		f.activate(tabs[((i+by)%n+n)%n])
 	}
 }
 
 // showProject shows the project at i of the rail, the last for -1.
 func (h *desktop) showProject(i int) {
 	f := h.f
+	tabs := f.shownTabs()
 	if i < 0 {
-		i = len(f.tabs) - 1
+		i = len(tabs) - 1
 	}
-	if i >= 0 && i < len(f.tabs) {
-		f.activate(f.tabs[i])
+	if i >= 0 && i < len(tabs) {
+		f.activate(tabs[i])
 	}
 }
 
@@ -579,7 +623,7 @@ func (f *frame) rail() float32 {
 // else the name of its folder.
 func railTitle(s *settings.Settings, dir string) string {
 	if dir != "" {
-		if own := railLabel(s.ProjectTabStyle[dir].Label); own != "" {
+		if own := strings.TrimSpace(s.ProjectTabStyle[dir].Label); own != "" {
 			return own
 		}
 	}
@@ -616,7 +660,7 @@ func railFitShort(name string, width float32) string {
 
 // railOrder is the projects in the order their rows show: the one that
 // moved last first.
-func railOrder(tabs []*desktop, now time.Time) []*desktop {
+func railOrder(tabs []*desktop) []*desktop {
 	hs := slices.Clone(tabs)
 	slices.SortStableFunc(hs, func(x, y *desktop) int {
 		switch tx, ty := x.activityAt, y.activityAt; {
@@ -630,16 +674,21 @@ func railOrder(tabs []*desktop, now time.Time) []*desktop {
 	return hs
 }
 
+// shownTabs returns the projects in the order currently displayed on the rail.
+func (f *frame) shownTabs() []*desktop {
+	if f.m != nil && f.m.s != nil && f.m.s.RailOrder != "manual" {
+		return railOrder(f.tabs)
+	}
+	return f.tabs
+}
+
 func (f *frame) railView(c *ui.Context, a *app) {
 	if !f.m.s.ProjectTabs {
 		return
 	}
 	p := a.pal
 	now := time.Now()
-	tabs := f.tabs
-	if f.m.s.RailOrder != "manual" {
-		tabs = railOrder(f.tabs, now)
-	}
+	tabs := f.shownTabs()
 	compact := f.m.s.RailRows == "compact"
 	names := make([]string, len(tabs))
 	for i, h := range tabs {
@@ -861,18 +910,19 @@ func (f *frame) move(h, before *desktop) {
 	if h == before || !slices.Contains(f.tabs, h) {
 		return
 	}
+	// If currently sorted by activity, seed manual order from the displayed
+	// order so dragging one row does not jump the rest back to insertion order.
+	if f.m.s.RailOrder != "manual" {
+		f.tabs = f.shownTabs()
+		f.m.s.RailOrder = "manual"
+		f.m.s.Changed()
+	}
 	f.tabs = slices.DeleteFunc(f.tabs, func(d *desktop) bool { return d == h })
 	at := len(f.tabs)
 	if i := slices.Index(f.tabs, before); i >= 0 {
 		at = i
 	}
 	f.tabs = slices.Insert(f.tabs, at, h)
-	// The order dragged is the one kept: sorting by what moved last would
-	// take it away as soon as another project changes.
-	if f.m.s.RailOrder != "manual" {
-		f.m.s.RailOrder = "manual"
-		f.m.s.Changed()
-	}
 	f.keepRail()
 	if f.win != nil {
 		f.win.Invalidate()
@@ -1031,20 +1081,20 @@ func railLinesWidth(h *desktop, p *palette) float32 {
 }
 
 // railWhen is when a project last moved, as its row has room for it: the
-// minute, today's hour and minute, or the day.
+// minute, today's hour and minute, yesterday, or the date.
 func railWhen(at, now time.Time) string {
 	if at.IsZero() {
 		return ""
 	}
 	switch d := now.Sub(at); {
 	case d < time.Minute:
-		return "刚刚"
+		return locales.AgoJustNow()
 	case d < time.Hour:
-		return strconv.Itoa(int(d.Minutes())) + "m"
+		return shortAgo(at, now)
 	case now.Format("2006-01-02") == at.Format("2006-01-02"):
 		return at.Format("15:04")
 	case now.AddDate(0, 0, -1).Format("2006-01-02") == at.Format("2006-01-02"):
-		return "\u6628\u5929"
+		return locales.SessionsYesterday()
 	}
 	return at.Format("01-02")
 }
@@ -1074,12 +1124,8 @@ func (f *frame) railChanges(h *desktop) int {
 	h.changesBusy, h.changesGen = true, h.changesGen+1
 	gen := h.changesGen
 	// A project left alone never draws, and its app runs the work posted
-	// to it only once it does: the window's own app runs it here instead,
+	// to it only once it does: the window's active app runs it here instead,
 	// so a row shows without a switch to its tab.
-	post, draw := h.a.post, h.a.invalidate
-	if t := f.active; t != nil {
-		post, draw = t.a.post, t.a.invalidate
-	}
 	bg.Go(func() {
 		var st *git.Status
 		var added, deleted int
@@ -1111,7 +1157,7 @@ func (f *frame) railChanges(h *desktop) int {
 				}
 			}
 		}
-		post(func() {
+		f.post(func() {
 			if h.changesGen != gen {
 				return
 			}
@@ -1137,7 +1183,7 @@ func (f *frame) railChanges(h *desktop) int {
 				upstream := st.Upstream
 				bg.Go(func() {
 					err := r.FetchUpstream(upstream)
-					h.a.post(func() {
+					f.post(func() {
 						h.fetchBusy = false
 						if err != nil {
 							return
@@ -1145,15 +1191,13 @@ func (f *frame) railChanges(h *desktop) int {
 						// The fetch heard of the commits: read them again,
 						// at once.
 						h.changesAt = time.Time{}
-						h.a.services.Invalidate()
+						f.invalidate()
 					})
 				})
 			}
-			// The rail draws only when something asks it to: ask again
-			// when the count is due, so the square keeps up with a work
-			// tree changed elsewhere.
-			// Not counted as background work: a test would wait it out.
-			time.AfterFunc(railChangesEvery, draw)
+			// Schedule a single window-wide tick so the rail keeps up with
+			// work trees changed elsewhere.
+			f.scheduleRailTick()
 		})
 	})
 	return h.changes
@@ -1166,10 +1210,6 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 	var style settings.TabStyle
 	if dir != "" {
 		style = f.m.s.ProjectTabStyle[dir]
-	}
-	own := railLabel(style.Label)
-	if own != "" {
-		label = own
 	}
 	// The connection of a remote folder: its badge's color, and what the
 	// tip says of it.
@@ -1329,7 +1369,7 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 		// apart without a slab across the rail.
 		ms := min(sq.H-8, float32(railLogo))
 		chip := ui.Rect{X: sq.X + 7, Y: sq.Y + (sq.H-ms)/2, W: ms, H: ms}
-		if src := h.logoSrc; src != nil && own == "" && !dragged {
+		if src := h.logoSrc; src != nil && !dragged {
 			pt.Clip(chip, 4, func() { pt.Image(src, chip, ui.Contain) })
 		} else {
 			pt.Fill(chip, col.Alpha(0.2*alpha), 5)
@@ -1337,26 +1377,25 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 			// not by the dot before it.
 			paintInitials(pt, chip, strings.TrimLeft(label, "._- "), ms*0.5, col.Alpha(alpha))
 		}
-		l := labelShape(label, railNameSize-1)
+		l := labelShape(label, railNameSize)
 		at := chip.X + chip.W + 7
 		// Two lines: the name above, and under it the lines of its work
 		// and when it last moved.
 		pt.Glyphs(l.glyphs, at, r.Y+nameY+l.mid, ink.Alpha(alpha))
-		x := at
-		for i, c := range railLines(h, p) {
-			if compact {
-				break
+		if !compact {
+			x := at
+			for i, c := range railLines(h, p) {
+				if i > 0 {
+					x += railSubGap
+				}
+				sl := labelShape(c.text, railSubSize)
+				pt.Glyphs(sl.glyphs, x, r.Y+subY+sl.mid, c.col.Alpha(alpha))
+				x += sl.w
 			}
-			if i > 0 {
-				x += railSubGap
+			if when := railWhen(h.activityAt, pt.Now()); when != "" {
+				sl := labelShape(when, railSubSize)
+				pt.Glyphs(sl.glyphs, sq.X+sq.W-8-sl.w, r.Y+subY+sl.mid, p.muted.Alpha(alpha))
 			}
-			sl := labelShape(c.text, railSubSize)
-			pt.Glyphs(sl.glyphs, x, r.Y+subY+sl.mid, c.col.Alpha(alpha))
-			x += sl.w
-		}
-		if when := railWhen(h.activityAt, pt.Now()); when != "" && !compact {
-			sl := labelShape(when, railSubSize)
-			pt.Glyphs(sl.glyphs, sq.X+sq.W-8-sl.w, r.Y+subY+sl.mid, p.muted.Alpha(alpha))
 		}
 		if conn != "" {
 			// At the corner the dots leave, cut out as they are, the

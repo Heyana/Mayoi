@@ -1758,7 +1758,7 @@ func (a *app) followMarkdown(v *viewer) {
 	}
 	loading := v.loading
 	start := func() {
-		if m.generation.Load() != generation || v.loading != loading || !slices.Contains(a.docs, d) {
+		if m.generation.Load() != generation || v.loading != loading || (!d.transient && !slices.Contains(a.docs, d)) {
 			return
 		}
 		v.wait = nil
@@ -1789,7 +1789,7 @@ func (a *app) followMarkdown(v *viewer) {
 				m.running, m.pending = false, false
 				m.cache = *cache
 				m.root = root
-				if v.loading != loading || !slices.Contains(a.docs, d) {
+				if v.loading != loading || (!d.transient && !slices.Contains(a.docs, d)) {
 					return
 				}
 				if m.generation.Load() != generation || d.buf.Version() != ver || d.path != path {

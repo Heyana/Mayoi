@@ -180,7 +180,7 @@ func (a *app) hunkButtons(c *ui.Context, v *diffView, i int, right, contentW, y 
 			bs = append(bs, button{iconArrowRight, locales.HunkAppend(), locales.HunkAppend(), locales.HunkAppendTip(), act})
 		}
 	}
-	h := a.font.lineH - 2
+	h := a.diffFont.lineH - 2
 	row := ui.Row(c.Key("hunk-buttons")).Absolute().Right(contentW - right + 18).Top(y + 1).Gap(4)
 	// Its left is not known until it is laid out: a box as wide as the
 	// buttons can be keeps clicks from the row under them.
@@ -207,7 +207,7 @@ func (a *app) hunkButtons(c *ui.Context, v *diffView, i int, right, contentW, y 
 			}
 		}
 	})
-	return ui.Rect{X: right - 18 - w, Y: y, W: w + 18, H: a.font.lineH}
+	return ui.Rect{X: right - 18 - w, Y: y, W: w + 18, H: a.diffFont.lineH}
 }
 
 // applyHunks stages changes of a file of a diff, unstages them or
@@ -390,7 +390,7 @@ const (
 // stand between the rail and the line numbers, by the change's first
 // line, staying by it as the lines scroll along.
 func (a *app) hunkArrowRects(v *diffView, k int, ars []hunkArrow, l diffGeometry) []ui.Rect {
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	out := make([]ui.Rect, len(ars))
 	if !v.split {
 		from, _ := v.hunkRows(k)

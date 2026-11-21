@@ -339,9 +339,11 @@ type diffView struct {
 
 	files []*diffFile
 	// preview shows the one Markdown file of the diff as the document it
-	// is, in place of its lines, and markdown is its view.
-	preview  bool
-	markdown *viewer
+	// is, in place of its lines, and markdown is its view. markdownDoc is
+	// held when the preview owns a transient document not in app.docs.
+	preview     bool
+	markdown    *viewer
+	markdownDoc *document
 	// foldFiles is the last bulk choice, including files not yet listed.
 	// Once chosen, it also replaces automatic folding of large files.
 	foldFiles *bool
@@ -681,8 +683,24 @@ func (v *diffView) same(o *diffView) bool {
 	return v.commit.key() == o.commit.key()
 }
 
+// stopMarkdown closes the Markdown preview viewer and any transient document it owns.
+func (v *diffView) stopMarkdown() {
+	if v.markdown != nil {
+		v.markdown.stop()
+		v.markdown = nil
+	}
+	if v.markdownDoc != nil {
+		if v.markdownDoc.hl != nil {
+			v.markdownDoc.hl.Close()
+		}
+		v.markdownDoc = nil
+	}
+	v.preview = false
+}
+
 // stop lets go of the highlighters and the editors of the sides edited.
 func (v *diffView) stop() {
+	v.stopMarkdown()
 	for _, f := range v.files {
 		f.stop()
 	}
@@ -2410,10 +2428,7 @@ func previewFile(v *diffView) *diffFile {
 // is, rendered and scrolled on its own, or its lines again.
 func (a *app) toggleDiffPreview(v *diffView) {
 	if v.preview {
-		if m := v.markdown; m != nil {
-			m.stop()
-		}
-		v.preview, v.markdown = false, nil
+		v.stopMarkdown()
 		a.invalidate()
 		return
 	}
@@ -2421,18 +2436,25 @@ func (a *app) toggleDiffPreview(v *diffView) {
 	if f == nil {
 		return
 	}
-	text, err := os.ReadFile(f.path)
-	if err != nil || isBinary(text) {
-		a.tell(note{message: locales.PreviewEmpty()})
-		return
-	}
 	var doc *document
-	if i := a.docIndex(f.path); i >= 0 {
-		doc = a.docs[i]
-	} else {
+	if f.base != diffCommit {
+		if i := a.docIndex(f.path); i >= 0 {
+			doc = a.docs[i]
+		}
+	}
+	if doc == nil {
+		text := f.new.text
+		if text == "" && f.letter == 'D' {
+			text = f.old.text
+		}
+		if text == "" || f.binary {
+			a.tell(note{message: locales.PreviewEmpty()})
+			return
+		}
 		a.nextID++
-		doc = newDocument(a.nextID, f.path, string(text), highlight.New(highlight.Lexer(f.path), a.invalidate))
-		a.docs = append(a.docs, doc)
+		doc = newDocument(a.nextID, f.path, text, highlight.New(highlight.Lexer(f.path), a.invalidate))
+		doc.transient = true
+		v.markdownDoc = doc
 	}
 	v.markdown = newPreviewViewer(doc)
 	v.markdown.markdown = &markdownPreview{}

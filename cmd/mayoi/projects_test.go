@@ -696,9 +696,16 @@ func TestRailOrdersItsProjectsByActivity(t *testing.T) {
 		{"one that never moved", []*desktop{never, moved}, moved},
 		{"one that never moved last", []*desktop{never, old}, old},
 	} {
-		if got := railOrder(c.tabs, now); got[0] != c.want {
+		if got := railOrder(c.tabs); got[0] != c.want {
 			t.Errorf("%s is first, want %v", c.name, c.want)
 		}
+	}
+	// Custom labels from `mayoi projects label` keep their full text on the row.
+	s := settings.Default()
+	dir := filepath.Join(t.TempDir(), "thing")
+	s.SetTabStyle(dir, settings.TabStyle{Label: "Thing: the engine"})
+	if got := railTitle(s, dir); got != "Thing: the engine" {
+		t.Errorf("railTitle = %q, want full label", got)
 	}
 }
 

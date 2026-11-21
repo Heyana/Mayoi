@@ -191,6 +191,9 @@ func (m *mayoi) serveProjects(p *cli.Projects, reply func(cli.Reply), fail func(
 		st := m.s.ProjectTabStyle[dir]
 		st.Label = p.Label
 		m.s.SetTabStyle(dir, st)
+		for _, f := range m.frames {
+			f.invalidate()
+		}
 		reply(cli.Reply{Output: dir + "\n"})
 	case "remove":
 		var hs []*desktop

@@ -293,8 +293,8 @@ func (a *app) revealDiffMatch(v *diffView) {
 		return
 	}
 	shown, at := expandTabs(text)
-	x0, x1 := a.font.width(shown[:at(m.start)]), a.font.width(shown[:at(m.end)])
-	if x0 < v.scroll.X || x1 > v.scroll.X+w-a.font.charW {
+	x0, x1 := a.diffFont.width(shown[:at(m.start)]), a.diffFont.width(shown[:at(m.end)])
+	if x0 < v.scroll.X || x1 > v.scroll.X+w-a.diffFont.charW {
 		v.scroll.X = max(0, x0-w/3)
 	}
 }
@@ -351,7 +351,7 @@ func (a *app) paintDiffHits(pt *ui.Painter, v *diffView, f *diffFile, row *diffR
 		}
 		from := utf8.RuneCountInString(text[:m.start])
 		to := from + utf8.RuneCountInString(text[m.start:m.end])
-		for _, rc := range diffSelRects(a.font, text, from, to, x, y, cols, v.built.wrap) {
+		for _, rc := range diffSelRects(a.diffFont, text, from, to, x, y, cols, v.built.wrap) {
 			box := ui.Rect{X: rc.X - 1, Y: rc.Y + 1, W: rc.W + 2, H: rc.H - 2}
 			if k == d.cur {
 				pt.Fill(box, p.matchNow, 3)

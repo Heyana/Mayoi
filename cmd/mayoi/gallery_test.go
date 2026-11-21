@@ -275,6 +275,23 @@ var galleryStates = []struct {
 		hs.settle()
 		hs.insert("// more\n")
 	}},
+	{"stats", func(hs *harness) {
+		if hs.a.stats == nil {
+			hs.a.stats = &statsState{}
+		}
+		st := hs.a.stats
+		st.open = true
+		st.at = time.Now()
+		st.rows = []statsRow{{
+			dir:  hs.root,
+			name: filepath.Base(hs.root),
+			count: [statSpans]statsAmount{
+				{Commits: 2, Added: 18, Removed: 4, Lines: true},
+				{Commits: 5, Added: 64, Removed: 12, Lines: true},
+				{Commits: 12, Added: 240, Removed: 45, Lines: true},
+			},
+		}}
+	}},
 }
 
 // commitChecksBox makes the test folder a work tree, and shows the box of
@@ -304,7 +321,7 @@ func TestGallery(t *testing.T) {
 			page.WriteString(`<div class="row">`)
 			for _, theme := range galleryThemes {
 				for _, dark := range []bool{false, true} {
-					if !dark && alwaysDark(theme) {
+					if (!dark && alwaysDark(theme)) || (dark && alwaysLight(theme)) {
 						continue
 					}
 					name := galleryName(st.name, loc, theme, dark)

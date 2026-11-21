@@ -659,6 +659,12 @@ func (p *Prefs) normalize() {
 	if p.MarkdownMode != "live" && p.MarkdownMode != "reading" {
 		p.MarkdownMode = ""
 	}
+	if p.RailOrder != "manual" {
+		p.RailOrder = ""
+	}
+	if p.RailRows != "compact" {
+		p.RailRows = ""
+	}
 	// The themes were appearances once.
 	if p.Appearance == "matrix" || p.Appearance == "claude" {
 		p.Theme, p.Appearance = p.Appearance, ""

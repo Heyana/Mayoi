@@ -43,6 +43,7 @@ type document struct {
 	// markdown is set on an untitled document a preview command was run
 	// on, which shows it as Markdown until a name it is saved as decides.
 	markdown    bool
+	transient   bool // owned by a diff preview, not listed in app.docs
 	kept        string
 	keptVersion uint64
 	buf         *ui.TextBuffer

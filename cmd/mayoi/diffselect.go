@@ -123,14 +123,14 @@ func (a *app) overDiffControl(v *diffView, x, y float32) bool {
 	if slices.ContainsFunc(v.controls, func(r ui.Rect) bool { return r.Contains(cx, cy) }) {
 		return true
 	}
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	sticky, stickyY := v.stickyHeader(lineH)
 	return sticky >= 0 && cy >= stickyY && cy < stickyY+lineH
 }
 
 // diffTextRow returns the row of side of a diff at y of its view.
 func (a *app) diffTextRow(v *diffView, y float32, side int) int {
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	y += v.scroll.Y
 	if side == 1 {
 		y -= a.rightShift(v)
@@ -149,7 +149,7 @@ func (a *app) diffTextAt(v *diffView, l diffGeometry, x, y float32, side int) (d
 	if !ok {
 		return diffPoint{row, 0}, false
 	}
-	lineH := a.font.lineH
+	lineH := a.diffFont.lineH
 	textX := l.textX
 	top := editorPadY + float32(v.tops[row])*lineH
 	cols := l.cols[0]
@@ -158,7 +158,7 @@ func (a *app) diffTextAt(v *diffView, l diffGeometry, x, y float32, side int) (d
 		top, _ = a.sideRowY(v, side, row)
 		cols = l.cols[side]
 	}
-	col := diffCaretCol(a.font, clipLine(text), x+v.scroll.X-textX, y+v.scroll.Y-top, lineH, cols, v.built.wrap)
+	col := diffCaretCol(a.diffFont, clipLine(text), x+v.scroll.X-textX, y+v.scroll.Y-top, lineH, cols, v.built.wrap)
 	return diffPoint{row, col}, true
 }
 
@@ -284,7 +284,7 @@ func (a *app) diffTextInput(v *diffView, ev ui.InputEvent) bool {
 			return false
 		}
 		// Past the top or the bottom of the view, it scrolls along.
-		lineH := a.font.lineH
+		lineH := a.diffFont.lineH
 		maxY := max(0, 2*editorPadY+float32(v.tops[len(v.rows)])*lineH-v.viewH)
 		switch {
 		case ev.Y < 0:
@@ -337,13 +337,13 @@ func (a *app) paintDiffSel(pt *ui.Painter, v *diffView, i, side int, x, y float3
 	if !focused {
 		col = a.pal.selectedDim
 	}
-	for _, rc := range diffSelRects(a.font, text, from, to, x, y, cols, v.built.wrap) {
+	for _, rc := range diffSelRects(a.diffFont, text, from, to, x, y, cols, v.built.wrap) {
 		pt.Fill(rc, col, 0)
 	}
 	if i < hi.row {
 		// The selection goes on past the line: its break shows selected.
-		cx, k := diffCaretX(a.font, text, n, cols, v.built.wrap)
-		pt.Fill(ui.Rect{X: x + cx, Y: y + float32(k)*a.font.lineH, W: a.font.charW / 2, H: a.font.lineH}, col, 0)
+		cx, k := diffCaretX(a.diffFont, text, n, cols, v.built.wrap)
+		pt.Fill(ui.Rect{X: x + cx, Y: y + float32(k)*a.diffFont.lineH, W: a.diffFont.charW / 2, H: a.diffFont.lineH}, col, 0)
 	}
 }
 

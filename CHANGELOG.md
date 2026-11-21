@@ -5,38 +5,22 @@ needs a `## <version>` section here, or its build fails.
 
 ## Unreleased
 
-- The rail has two switches at its top, on the row of the sidebar's own and in its size: the order it keeps its projects in, and whether a row shows the lines of its work and the time or its name alone. Each is lit while on, off for the other state, and a click turns it; both are kept in the settings.
-- Dragging a project to a place keeps that order, rather than being taken away by the next project that moves.
-
-- Each row of the project rail takes a second line under its name: the lines the work tree gained and lost (`+12 −3`), and when the project last moved (`刚刚`, `11:17`, `11-18`).
-- The rail sorts its projects by when they last moved, the one worked on last first: a commit of its branch, or a file of its work tree changed.
-
-- A commit chosen in Source Control shows how many lines it gained and lost.
-- Commits chosen together show the files they changed in one diff, each with its +/−.
-- The panel of a commit's files shows each file's +/− beside its letter.
-- A commit's diff beside its files shows the file chosen in the panel, alone.
-- Solarized Light, Ethan Schoonover's cream and its eight accents, as a theme.
-- A Markdown file shows as it was left, source, Live Preview or Reading, also once the preview tab shows another file.
-- The changes of the work tree show the lines each file gained and lost, beside its letter.
-- The header of each group of changes adds up the lines of its files, beside their count.
-- The branch button counts the branches, and the worktree button the worktrees, beside their names.
-- The theme preference names Solarized Light, which it lacked.
-- The box of the worktrees says how many files each has uncommitted, or that it is clean.
-- A diff draws its lines a size below the editor's, and the lists of source control a size above theirs, so the two read together.
-- A diff of one Markdown file shows it rendered, in reading view, from a button of its breadcrumbs.
-- The square of each project on the rail counts the files its work tree has changed, so another project shows its own on a switch to it.
-- The rail names each project beside a mark of its own, its initials on a wash of its color or its logo, in rows as wide as the longest name.
-- The end of each project's row counts the commits its branch has to push, to pull, and the files its work tree has changed.
-- The rail reads the files each project has changed every ten seconds, at once on a switch to it, and only for a folder a repository holds.
-- A Git operation reads the rail's counts of every project at once, not a second later.
-- The rail fetches each project's upstream every half hour before it counts the commits to pull, so a branch behind someone else's commits says so.
-- The rail counts the files changed of every project as its window opens, and fetches alone: a remote that does not answer holds back neither the count nor the reads after it.
-- The rail shows the counts of a project whose tab has not been switched to yet, rather than only once it is.
-- `mayoi projects` lists the projects of the rail, adds folders to it, and removes them, so a script or an agent can register its own projects.
-- A button beside the title bar's opens a panel of recent commits: what each project of the rail committed itself over the last day, week and month, with the lines those commits added and deleted, and the total of every project at its end. Commits of others are left out. The counts read first, as they need no diff of a commit, and the lines follow; Git is read again every five minutes while the panel is open.
-- The panel of recent commits sets every column on one line: the spans' names, each project's lines and the total share one height and one left edge, and a project's line lights under the pointer.
-- The panel of recent commits reads a month of commits once and only what was committed since after that, and keeps what it read beside the settings, so a panel opened again has its numbers before Git runs.
-- `mayoi projects list` says each project's label beside its folder, and `mayoi projects label` and `unlabel` name a project on the rail.
+- Switches at the top of the project rail toggle activity vs. manual order and full vs. compact rows.
+- Dragging a project on the rail switches to manual order and preserves the visible order.
+- Full project rail rows show uncommitted line counts (`+12 −3`) and last activity time.
+- The project rail sorts projects by most recent commit or working-tree change by default.
+- Selected commits in Source Control show total lines gained and lost, and multi-selection diffs their range.
+- Commit file panels show per-file `+/−` line counts and open the chosen file alone in the diff.
+- Added the Solarized Light theme and listed it in **Settings**.
+- Markdown tabs reopen in the mode they were left in (`Source`, `Live Preview`, or `Reading`).
+- Source Control file rows and group headers show working-tree `+/−` line counts.
+- Branch and worktree buttons show counts when there is more than one, and worktrees show uncommitted counts.
+- Diffs render one size smaller than the editor while Source Control lists render one size larger.
+- Single-Markdown-file diffs include a **Reading** toggle button in the breadcrumbs.
+- Project rail rows show each project's logo or initials, branch ahead/behind counts, and changed file count.
+- The project rail fetches upstreams periodically in the background and refreshes counts after Git actions.
+- Added `mayoi projects` (`list`, `add`, `remove`, `label`, `unlabel`) for managing rail projects via CLI.
+- Added a title-bar recent commits panel showing each project's 24h, 7d, and 30d commits and line totals.
 - The Markdown Reading view shows an HTML `<table>` as a table, with its cells' alignment and pictures.
 - HTML `<ul>`, `<ol>` and `<li>` show as lists in the Reading view, nested and numbered.
 - A `<details>` folds under its `<summary>` in the Reading view; click the summary to open it.
