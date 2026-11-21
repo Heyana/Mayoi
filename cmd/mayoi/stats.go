@@ -168,7 +168,7 @@ func (a *app) statsView(c *ui.Context) {
 						ui.Text(c, statSpanName(s)).Width(statColumnW).Shrink(0).FontSize(11.5).TextColor(p.faint).SingleLine()
 					}
 				})
-				ui.Scroll(c.Key("stats-rows")).MaxHeight(420).Padding(2, 14, 10, 14).Children(func() {
+				ui.Scroll(c.Key("stats-rows")).MaxHeight(420).Padding(2, 14, 8, 14).Children(func() {
 					if len(st.rows) == 0 {
 						ui.Text(c, locales.StatsEmpty()).FontSize(13).TextColor(p.muted).Padding(8, 4)
 						return
@@ -177,6 +177,9 @@ func (a *app) statsView(c *ui.Context) {
 						a.statsLine(c, row)
 					}
 				})
+				if len(st.rows) > 0 {
+					a.statsTotal(c, st.rows)
+				}
 			})
 			if box.PressedOutside() || back.OverlayShortcut(0, ui.KeyEscape) {
 				st.open = false
@@ -197,28 +200,60 @@ const (
 func (a *app) statsLine(c *ui.Context, row statsRow) {
 	p := a.pal
 	ui.Row(c.Key("stats:"+row.dir)).FillWidth().Padding(6, 0).Gap(statColumnGap).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, row.name).FontSize(13).TextColor(p.text).Grow(1).Basis(0).MinWidth(0).SingleLine()
-		for s := 0; s < statSpans; s++ {
-			ui.Column(c).Width(statColumnW).Shrink(0).Gap(3).Children(func() {
-				col := p.text
-				if row.commits[s] == 0 {
-					col = p.faint
-				}
-				ui.Text(c, fmt.Sprintf(locales.StatsCommits(), row.commits[s])).FontSize(12.5).TextColor(col).SingleLine()
-				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					switch {
-					case row.added[s] == 0 && row.removed[s] == 0:
-						ui.Text(c, "\u2014").FontSize(10.5).TextColor(p.faint).SingleLine()
-						return
-					}
-					if row.added[s] > 0 {
-						ui.Text(c, "+"+railLinesCount(row.added[s])).FontSize(10.5).TextColor(p.added).SingleLine()
-					}
-					if row.removed[s] > 0 {
-						ui.Text(c, "\u2212"+railLinesCount(row.removed[s])).FontSize(10.5).TextColor(p.removed).SingleLine()
-					}
-				})
-			})
-		}
+		a.statsCells(c, row.name, p.text, row.commits, row.added, row.removed)
 	})
+}
+
+// statsTotal is the panel's last line, kept below the list: the commits of
+// every project it lists, and the lines those commits added and deleted,
+// over each span.
+func (a *app) statsTotal(c *ui.Context, rows []statsRow) {
+	p := a.pal
+	commits, added, removed := statsSum(rows)
+	ui.Row(c.Key("stats-total")).FillWidth().Padding(10, 0).Gap(statColumnGap).AlignItems(ui.Center).
+		BorderWidth(1, 0, 0, 0).BorderColor(p.border).Children(func() {
+		a.statsCells(c, locales.StatsTotal(), p.muted, commits, added, removed)
+	})
+}
+
+// statsSum adds the commits of every row, and the lines they added and
+// deleted, over each span.
+func statsSum(rows []statsRow) (commits, added, removed [statSpans]int) {
+	for _, r := range rows {
+		for s := 0; s < statSpans; s++ {
+			commits[s] += r.commits[s]
+			added[s] += r.added[s]
+			removed[s] += r.removed[s]
+		}
+	}
+	return commits, added, removed
+}
+
+// statsCells is a row of the panel: the name at the left, here in nameCol,
+// and under each span the commits and the lines, in their colors.
+func (a *app) statsCells(c *ui.Context, name string, nameCol ui.Color, commits, added, removed [statSpans]int) {
+	p := a.pal
+	ui.Text(c, name).FontSize(13).TextColor(nameCol).Grow(1).Basis(0).MinWidth(0).SingleLine()
+	for s := 0; s < statSpans; s++ {
+		ui.Column(c).Width(statColumnW).Shrink(0).Gap(3).Children(func() {
+			col := p.text
+			if commits[s] == 0 {
+				col = p.faint
+			}
+			ui.Text(c, fmt.Sprintf(locales.StatsCommits(), commits[s])).FontSize(12.5).TextColor(col).SingleLine()
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+				switch {
+				case added[s] == 0 && removed[s] == 0:
+					ui.Text(c, "\u2014").FontSize(10.5).TextColor(p.faint).SingleLine()
+					return
+				}
+				if added[s] > 0 {
+					ui.Text(c, "+"+railLinesCount(added[s])).FontSize(10.5).TextColor(p.added).SingleLine()
+				}
+				if removed[s] > 0 {
+					ui.Text(c, "\u2212"+railLinesCount(removed[s])).FontSize(10.5).TextColor(p.removed).SingleLine()
+				}
+			})
+		})
+	}
 }

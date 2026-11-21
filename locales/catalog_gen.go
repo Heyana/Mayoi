@@ -9404,6 +9404,16 @@ func (msgs Messages) RailSortActivity() string {
 	return Catalog.Format(msgs.locale, "railSortActivity", nil)
 }
 
+// StatsTotal says "All projects"
+// in the language the app shows.
+func StatsTotal() string { return In(i18n.Locale()).StatsTotal() }
+
+// StatsTotal says "All projects"
+// in the language of msgs.
+func (msgs Messages) StatsTotal() string {
+	return Catalog.Format(msgs.locale, "statsTotal", nil)
+}
+
 // StatsTitle says "Recent commits"
 // in the language the app shows.
 func StatsTitle() string { return In(i18n.Locale()).StatsTitle() }

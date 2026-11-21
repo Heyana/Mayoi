@@ -1157,6 +1157,7 @@
   "railRowsCompact": "Rows show the name alone · click for the lines and time",
   "railRowsFull": "Rows show the lines and time · click for the name alone",
   "railSortActivity": "Sorted by what moved last · click for the order you set",
+  "statsTotal": "All projects",
   "statsTitle": "Recent commits",
   "statsReading": "Reading…",
   "statsEmpty": "No commits yet",

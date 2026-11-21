@@ -63,6 +63,10 @@ func TestStatsCountsTheCommitsOfEachProject(t *testing.T) {
 	if row.added != [3]int{3, 3, 6} {
 		t.Fatalf("its commits added %v lines, want [3 3 6]: a commit of forty days ago is out of every span", row.added)
 	}
+	// The panel's last line adds every project it lists.
+	if got, _, _ := statsSum(f.stats.rows); got != [3]int{2, 2, 3} {
+		t.Fatalf("the panel's total is %v commits over the day, week and month, want [2 2 3]: the other project committed once", got)
+	}
 	if dir := os.Getenv("SHOTS"); dir != "" {
 		out, err := os.Create(filepath.Join(dir, "stats.png"))
 		if err != nil {
