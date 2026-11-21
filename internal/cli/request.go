@@ -34,6 +34,9 @@ type Request struct {
 	Run []Command `json:"run,omitempty"`
 	// List asks for the commands.
 	List bool `json:"list,omitempty"`
+	// Projects asks for the projects the app shows on its rail, or adds
+	// them, or takes them away.
+	Projects *Projects `json:"projects,omitempty"`
 	// Settings is what `mayoi settings` asks of the preferences, which
 	// the command does itself rather than the app.
 	Settings *Settings `json:"settings,omitempty"`
@@ -48,6 +51,15 @@ type Target struct {
 	Path string `json:"path"`
 	Line int    `json:"line,omitempty"`
 	Col  int    `json:"col,omitempty"`
+}
+
+// Projects is what `mayoi projects` does with the projects of the rail:
+// list them, add folders to it, or take them away.
+type Projects struct {
+	// Verb is "list", "add" or "remove", "" for a list.
+	Verb string `json:"verb,omitempty"`
+	// Folders are the folders to add or to remove, absolute.
+	Folders []string `json:"folders,omitempty"`
 }
 
 // Command is a command of the app by its identifier, as the command
@@ -108,7 +120,7 @@ type Reply struct {
 // Plain reports whether the request only opens folders and files, which
 // starting the app with them does as well.
 func (r Request) Plain() bool {
-	if r.Window != "" || r.NewWindow || r.Wait || r.Diff != nil || r.Remote != "" || r.Run != nil || r.List || r.Settings != nil || r.DisablePlugins {
+	if r.Window != "" || r.NewWindow || r.Wait || r.Diff != nil || r.Remote != "" || r.Run != nil || r.List || r.Settings != nil || r.Projects != nil || r.DisablePlugins {
 		return false
 	}
 	for _, t := range r.Paths {
@@ -130,6 +142,7 @@ const Usage = `Usage: mayoi [options] [folder or file]...
        mayoi settings [list | get <key>... | set <key>=<value>... | unset <key>...]
        mayoi run <command>[=<argument>]...
        mayoi commands
+       mayoi projects [list | add <folder>... | remove <folder>...]
 
 Opens folders and files in Mayoi, starting it if it isn't running.
 
@@ -161,6 +174,11 @@ Commands:
                     one in front. Some take an argument after =, as
                     file.openFolder=<folder> or go.line=<line[:column]>.
   commands          List the commands, their names, shortcuts and arguments
+  projects          List the projects of the rail, one folder a line, add
+                    folders to it, or take them away. add puts a folder on
+                    the rail as a person opening it would, and remove closes
+                    it, keeping its session for the next time. A folder
+                    already on the rail is left as it is.
   plugin <command>  Install, update, remove, write and pack plugins: see
                     mayoi plugin --help
 
@@ -178,6 +196,9 @@ Examples:
   mayoi settings unset theme
   mayoi settings set 'aiSecretFiles+=*.pem'
   mayoi settings set projectTabStyle.'~/src/mayoi'.label=MG
+  mayoi projects
+  mayoi projects add ~/src/thing ~/src/other
+  mayoi projects remove ~/src/other
 `
 
 // Parse reads the mayoi command's arguments, run in cwd.
@@ -193,11 +214,14 @@ func Parse(args []string, cwd string) (Request, error) {
 		return remote.Clean(p)
 	}
 	sub := ""
-	if len(args) > 0 && (args[0] == "run" || args[0] == "commands" || args[0] == "settings") {
+	if len(args) > 0 && (args[0] == "run" || args[0] == "commands" || args[0] == "settings" || args[0] == "projects") {
 		sub, args = args[0], args[1:]
 		r.List = sub == "commands"
-		if sub == "settings" {
+		switch sub {
+		case "settings":
 			r.Settings = &Settings{}
+		case "projects":
+			r.Projects = &Projects{}
 		}
 	}
 	value := func(i *int, flag string) (string, error) {
@@ -223,6 +247,10 @@ func Parse(args []string, cwd string) (Request, error) {
 				return r, fmt.Errorf("commands takes no %q", arg)
 			case sub == "settings":
 				if err := r.Settings.word(arg); err != nil {
+					return r, err
+				}
+			case sub == "projects":
+				if err := r.Projects.word(arg); err != nil {
 					return r, err
 				}
 			default:
@@ -301,6 +329,14 @@ func Parse(args []string, cwd string) (Request, error) {
 			return r, err
 		}
 		r.Settings.resolve(abs)
+	case r.Projects != nil:
+		if r.Paths != nil || r.Diff != nil || r.Remote != "" || r.NewWindow || r.Wait || r.Window != "" {
+			return r, errors.New("projects takes only its folders")
+		}
+		r.Projects.resolve(abs)
+		if err := r.Projects.check(); err != nil {
+			return r, err
+		}
 	case sub != "" && (r.Paths != nil || r.Diff != nil || r.Remote != "" || r.NewWindow || r.Wait):
 		return r, fmt.Errorf("%s takes only --window", sub)
 	case r.Wait && len(r.Paths) == 0:
@@ -309,6 +345,53 @@ func Parse(args []string, cwd string) (Request, error) {
 		return r, errors.New("--diff opens nothing else")
 	}
 	return r, nil
+}
+
+// word takes a word of a mayoi projects: what it does with the rail, or
+// else a folder to add or to remove.
+func (p *Projects) word(arg string) error {
+	if p.Verb == "" {
+		switch arg {
+		case "list":
+			p.Verb = "list"
+			return nil
+		case "add", "remove", "rm":
+			if arg == "rm" {
+				arg = "remove"
+			}
+			p.Verb = arg
+			return nil
+		}
+		return fmt.Errorf("no projects command %q: mayoi projects lists, adds or removes them", arg)
+	}
+	if p.Verb == "list" {
+		return fmt.Errorf("list takes no %q: mayoi projects add <folder> adds one", arg)
+	}
+	p.Folders = append(p.Folders, arg)
+	return nil
+}
+
+// check asks for a folder where a verb needs one, and none where it does
+// not.
+func (p *Projects) check() error {
+	switch p.Verb {
+	case "add", "remove":
+		if len(p.Folders) == 0 {
+			return fmt.Errorf("%s needs a folder: mayoi projects %s <folder>", p.Verb, p.Verb)
+		}
+	default:
+		if len(p.Folders) > 0 {
+			return errors.New("a list takes no folder: mayoi projects add <folder> adds one")
+		}
+	}
+	return nil
+}
+
+// resolve makes the folders absolute, as the rails elsewhere name them.
+func (p *Projects) resolve(abs func(string) string) {
+	for i, f := range p.Folders {
+		p.Folders[i] = abs(f)
+	}
 }
 
 // word takes a word of a mayoi settings: what it does with the

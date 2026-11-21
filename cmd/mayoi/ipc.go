@@ -117,6 +117,9 @@ func (m *mayoi) serve(req cli.Request, reply func(cli.Reply)) {
 		h.show()
 		reply(cli.Reply{})
 		return
+	case req.Projects != nil:
+		m.serveProjects(req.Projects, reply, fail)
+		return
 	case req.List:
 		h, err := m.target(req)
 		if err != nil {
@@ -146,6 +149,63 @@ func (m *mayoi) serve(req cli.Request, reply func(cli.Reply)) {
 		return
 	}
 	m.openTargets(req, reply)
+}
+
+// serveProjects lists the projects of the rail, adds folders to it, or
+// takes them away, as `mayoi projects` asks.
+func (m *mayoi) serveProjects(p *cli.Projects, reply func(cli.Reply), fail func(string, ...any)) {
+	switch p.Verb {
+	case "", "list":
+		var out strings.Builder
+		for _, h := range m.wins {
+			if dir := h.a.folder(); dir != "" {
+				out.WriteString(dir + "\n")
+			}
+		}
+		reply(cli.Reply{Output: out.String()})
+	case "add":
+		for _, dir := range p.Folders {
+			info, err := os.Stat(dir)
+			if err != nil || !info.IsDir() {
+				fail("%s is not a folder", dir)
+				return
+			}
+		}
+		var out strings.Builder
+		for _, dir := range p.Folders {
+			if m.showing(dir) == nil {
+				m.openFolder(dir, false)
+			}
+			out.WriteString(dir + "\n")
+		}
+		reply(cli.Reply{Output: out.String()})
+	case "remove":
+		var hs []*desktop
+		for _, dir := range p.Folders {
+			h := m.showing(dir)
+			if h == nil {
+				fail("no project has %s open", dir)
+				return
+			}
+			hs = append(hs, h)
+		}
+		for _, h := range hs {
+			// A person's window asks before it closes changed files; the
+			// command has no one to ask, so it saves what it can and
+			// says so when a file is still changed.
+			if h.a.started {
+				h.a.autoSaveAll()
+				if h.a.anyDirty() {
+					fail("%s has files that are not saved", h.a.folder())
+					return
+				}
+			}
+		}
+		for _, h := range hs {
+			m.dropProject(h)
+		}
+		reply(cli.Reply{})
+	}
 }
 
 // openTargets opens the folders and files of the mayoi command, at their

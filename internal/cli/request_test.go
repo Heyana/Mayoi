@@ -63,6 +63,10 @@ func TestParse(t *testing.T) {
 		{[]string{"-n", "settings"}, Request{NewWindow: true, Paths: []Target{{Path: abs("settings")}}}},
 		// A folder called run, not first.
 		{[]string{"-n", "run"}, Request{NewWindow: true, Paths: []Target{{Path: abs("run")}}}},
+		{[]string{"projects"}, Request{Projects: &Projects{}}},
+		{[]string{"projects", "list"}, Request{Projects: &Projects{Verb: "list"}}},
+		{[]string{"projects", "add", "a", x}, Request{Projects: &Projects{Verb: "add", Folders: []string{abs("a"), x}}}},
+		{[]string{"projects", "rm", "a"}, Request{Projects: &Projects{Verb: "remove", Folders: []string{abs("a")}}}},
 	} {
 		c.want.Cwd = cwd
 		got, err := Parse(c.args, cwd)
@@ -78,6 +82,8 @@ func TestParse(t *testing.T) {
 		{"-f", "x"}, {"settings", "-g", "a.go"}, {"settings", "unset"}, {"settings", "list", "a=b"},
 		{"settings", "--add", "a=b"}, {"--add", "a=b"}, {"settings", "set", "fontFeatures+="}, {"settings", "set", "+=x"},
 		{"settings", "set", "-=x"}, {"settings", "--disable-plugins"},
+		{"projects", "x"}, {"projects", "list", "a"}, {"projects", "add"}, {"projects", "remove"},
+		{"projects", "add", "a", "-n"}, {"projects", "add", "a", "--window", "p"},
 	} {
 		if _, err := Parse(args, cwd); err == nil {
 			t.Errorf("Parse(%q) took it", args)
@@ -98,7 +104,7 @@ func TestPlain(t *testing.T) {
 	for _, r := range []Request{
 		{Paths: []Target{{Path: "/a", Line: 1}}}, {Wait: true}, {NewWindow: true}, {List: true},
 		{Run: []Command{{ID: "x"}}}, {Diff: []string{"a", "b"}}, {Remote: "h:/"}, {Window: "/w"},
-		{Settings: &Settings{}},
+		{Settings: &Settings{}}, {Projects: &Projects{}},
 	} {
 		if r.Plain() {
 			t.Errorf("%+v is plain", r)
