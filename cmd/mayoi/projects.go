@@ -45,7 +45,7 @@ const (
 )
 
 // railPad is the room over a name on its square, both sides.
-const railPad float32 = 14
+const railPad float32 = 20
 
 // railNameSize is the size of a project's name on its square, railLogo the
 // side of the logo it shows before the name, and railTextLead the room the
