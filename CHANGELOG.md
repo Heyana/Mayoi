@@ -20,6 +20,8 @@ needs a `## <version>` section here, or its build fails.
 - A diff of one Markdown file shows it rendered, in reading view, from a button of its breadcrumbs.
 - The square of each project on the rail counts the files its work tree has changed, so another project shows its own on a switch to it.
 - The rail names each project on its square, the rail as wide as the longest name and no wider than 200.
+- A project's logo shows small in a column left of its name, its names lined up, and its name in the window's text color.
+- The rail reads the files each project has changed every ten seconds, at once on a switch to it, and only for a folder a repository holds.
 - The Markdown Reading view shows an HTML `<table>` as a table, with its cells' alignment and pictures.
 - HTML `<ul>`, `<ol>` and `<li>` show as lists in the Reading view, nested and numbered.
 - A `<details>` folds under its `<summary>` in the Reading view; click the summary to open it.

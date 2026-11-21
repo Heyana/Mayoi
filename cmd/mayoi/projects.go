@@ -47,8 +47,14 @@ const (
 // railPad is the room over a name on its square, both sides.
 const railPad float32 = 14
 
-// railNameSize is the size of a project's name on its square.
-const railNameSize float32 = 13
+// railNameSize is the size of a project's name on its square, railLogo the
+// side of the logo it shows before the name, and railTextLead the room the
+// logo column takes, so that the names line up.
+const (
+	railNameSize float32 = 13
+	railLogo             = 20
+	railTextLead float32 = railLogo + 9
+)
 
 // frame is a native window of the app. It shows one project, or with
 // project tabs several, one at a time, which the rail on its left
@@ -286,6 +292,8 @@ func (f *frame) activate(h *desktop) {
 		}
 	}
 	f.active = h
+	// Its square counts its changes anew, as a switch shows it.
+	h.changesAt, h.changesBusy = time.Time{}, false
 	a := h.a
 	a.blurred = false
 	// Its files may have changed meanwhile, and the keyboard goes back to
@@ -564,7 +572,7 @@ func (f *frame) rail() float32 {
 func railWidthFor(names []string) float32 {
 	w := float32(railW)
 	for _, name := range names {
-		w = max(w, labelShape(name, railNameSize).w+railPad)
+		w = max(w, labelShape(name, railNameSize).w+railPad+railTextLead)
 	}
 	return min(w, railMaxW)
 }
@@ -602,9 +610,11 @@ func (f *frame) railView(c *ui.Context, a *app) {
 	f.railDrop(rail, a, nil)
 	_, atEnd := ui.DragOver[railDrag](rail)
 	folders := rail.FileDragOver()
+	// The names begin past the column of the logos, so that they line up
+	// whether a project has a logo or not.
 	labels := make([]string, len(tabs))
 	for i, name := range names {
-		labels[i] = railFitShort(name, width-railPad)
+		labels[i] = railFitShort(name, width-railPad-railTextLead)
 	}
 	rail.Children(func() {
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
@@ -751,9 +761,18 @@ func railName(dir string) (name, where string) {
 // finished or failed while the project was out of sight, in the color of
 // its state, and, while a program works, a ring turning around it. label is what it shows without a logo,
 // unless the project has a label of its own.
+// hasRepository reports whether dir holds a repository, which a worktree
+// of one does with a .git file.
+func hasRepository(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, ".git"))
+	return err == nil
+}
+
 // railChangesEvery is how often the square's count of changed files is
-// read again: often enough that a project switched to shows its own.
-const railChangesEvery = 3 * time.Second
+// read again, while the window draws its frames: a work tree changed in
+// another editor shows within it, and a window left alone does not run git
+// every second for a square no one looks at.
+const railChangesEvery = 10 * time.Second
 
 // railChangesSize is the size of the count on the square.
 const railChangesSize float32 = 10
@@ -763,8 +782,9 @@ const railChangesSize float32 = 10
 // no one's, or one not read yet.
 func (f *frame) railChanges(h *desktop) int {
 	dir := h.a.folder()
-	if dir == "" || h.a.conn != nil {
-		// A remote folder is not read from here.
+	if dir == "" || h.a.conn != nil || !hasRepository(dir) {
+		// A remote folder is not read from here, nor one no repository
+		// holds.
 		return 0
 	}
 	if h.changesBusy || time.Since(h.changesAt) < railChangesEvery {
@@ -953,18 +973,22 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 			pt.Fill(sq, p.accent.Alpha(0.14*drop), railRadius)
 			pt.Stroke(ui.Rect{X: sq.X - 2, Y: sq.Y - 2, W: sq.W + 4, H: sq.H + 4}, p.accent.Alpha(drop), railRadius+2, 1.5)
 		}
-		ink := col
-		if !on && !hovered {
-			ink = col.Mix(p.muted, 0.25)
+		// The name reads as text of the window, not in the project's
+		// color: a square is a shade of that color, too faint for it.
+		ink := p.text
+		if dragged {
+			ink = p.muted
 		}
+		// A project with a logo of its own shows it in the column left of
+		// its name, which lines the names up.
 		if src := h.logoSrc; src != nil && own == "" && !dragged {
-			// Shrinking with the square as it is pressed.
-			ls := sq.W - 8
-			logo := ui.Rect{X: sq.X + (sq.W-ls)/2, Y: sq.Y + (sq.H-ls)/2, W: ls, H: ls}
-			pt.Clip(logo, 6, func() { pt.Image(src, logo, ui.Contain) })
-		} else {
-			paintLabel(pt, sq, label, 12, ink.Alpha(alpha))
+			ls := min(sq.H-8, float32(railLogo))
+			logo := ui.Rect{X: sq.X + 7, Y: sq.Y + (sq.H-ls)/2, W: ls, H: ls}
+			pt.Clip(logo, 4, func() { pt.Image(src, logo, ui.Contain) })
 		}
+		l := labelShape(label, railNameSize-1)
+		at := sq.X + 8 + railTextLead
+		pt.Glyphs(l.glyphs, at, sq.Y+sq.H/2+l.mid, ink.Alpha(alpha))
 		if conn != "" {
 			// At the corner the dots leave, cut out as they are, the
 			// glyph of a server in the rail's ground.

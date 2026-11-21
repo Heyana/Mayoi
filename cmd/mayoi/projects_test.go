@@ -315,6 +315,51 @@ func TestRailNamesItsProjects(t *testing.T) {
 	}
 }
 
+// A project with a logo shows it in the column left of its name, small as
+// the square, not as wide as the square is.
+func TestRailShowsTheLogoBesideTheName(t *testing.T) {
+	root := t.TempDir()
+	var dirs []string
+	for _, name := range []string{"mayoi", "code-lab"} {
+		dir := filepath.Join(root, name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		dirs = append(dirs, dir)
+	}
+	f, tabs, tt := railFixture(t, dirs...)
+	// A logo far larger than the square, which the square must shrink.
+	logo := filepath.Join(root, "logo.png")
+	img := image.NewRGBA(image.Rect(0, 0, 96, 96))
+	for y := range 96 {
+		for x := range 96 {
+			img.Set(x, y, color.RGBA{R: 220, G: 60, B: 40, A: 255})
+		}
+	}
+	file, err := os.Create(logo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(file, img); err != nil {
+		t.Fatal(err)
+	}
+	file.Close()
+	tabs[0].logoSrc = decodeProjectLogo(logo)
+	step(tt)
+	if tabs[0].logoSrc == nil {
+		t.Fatal("no logo")
+	}
+	if dir := os.Getenv("SHOTS"); dir != "" {
+		out, err := os.Create(filepath.Join(dir, "rail-logo.png"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer out.Close()
+		png.Encode(out, tt.Image())
+	}
+	_ = f
+}
+
 func TestProjectWords(t *testing.T) {
 	for name, want := range map[string]string{
 		"mayoi": "M", "my-app": "MA", "mayoi_editor": "ME", "mayoiEditor": "ME", "go.dev": "GD", "": "?",
