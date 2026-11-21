@@ -1745,7 +1745,7 @@ func (a *app) paintDiffLine(pt *ui.Painter, file *diffFile, newSide bool, n, pee
 	// Where each row starts in shown, and ends.
 	breaks := append(sc.breaks[:0], 0)
 	if wrap {
-		breaks = append(breaks, wrapAt(shown, cols)...)
+		breaks = append(breaks, diffWrapAt(f, shown, cols)...)
 	}
 	breaks = append(breaks, len(shown))
 	// piece calls fn with each part of the run from b0 up to b1 of shown,

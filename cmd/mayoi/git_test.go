@@ -3190,3 +3190,54 @@ func TestGutterHunkActionsWithAgentContext(t *testing.T) {
 		})
 	}
 }
+
+func TestDiffWrapWideChars(t *testing.T) {
+	if got := wrapCount(strings.Repeat("中文", 10), 10); got != 4 {
+		t.Fatalf("wrapCount for wide runes = %d, want 4", got)
+	}
+	hs := newHarness(t, true)
+	hs.gitRepo()
+	a := hs.a
+	line := "2. **编辑态是否隐藏侧栏**(目前 `/builder`、`/scene3d`、`/routing` 已走 `meta.bare` 全屏隐藏侧栏，还需要补充更多测试文本确保超出一行)。"
+	os.WriteFile(hs.path("notes.md"), []byte(line+"\n"), 0o644)
+	hs.settleGit()
+	a.settings.WordWrap = true
+	a.run("git.openAllChanges")
+	hs.settleGit()
+	v := a.activeTab().diff
+	var lineRows int
+	for deadline := time.Now().Add(settleTimeout); time.Now().Before(deadline); {
+		hs.settleGit()
+		if v.viewW > 0 {
+			for _, r := range v.rows {
+				if r.kind == rowLine {
+					lineRows = r.h
+					break
+				}
+			}
+			if lineRows > 0 {
+				break
+			}
+		}
+	}
+	if v.viewW == 0 || lineRows == 0 {
+		t.Fatalf("diff never settled: viewW %v, rows %d", v.viewW, len(v.rows))
+	}
+	l := a.diffGeometry(v, v.split, v.viewW)
+	cols := l.cols[0]
+	breaks := diffWrapAt(a.diffFont, line, cols)
+	if len(breaks) == 0 {
+		t.Fatalf("line did not wrap within %d cols", cols)
+	}
+	maxW := float32(cols) * a.diffFont.charW
+	parts := append([]int{0}, append(breaks, len(line))...)
+	for k := 0; k+1 < len(parts); k++ {
+		seg := line[parts[k]:parts[k+1]]
+		if w := a.diffFont.width(seg); w > maxW+0.01 {
+			t.Errorf("wrapped segment %d %q is %.2f wide, exceeds %.2f", k, seg, w, maxW)
+		}
+	}
+	if lineRows != len(breaks)+1 {
+		t.Errorf("row height %d, want %d", lineRows, len(breaks)+1)
+	}
+}

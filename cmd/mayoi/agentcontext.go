@@ -124,7 +124,7 @@ func (a *app) editorReviewView(c *ui.Context, d *editor) bool {
 			rows := 1
 			if wrap {
 				shown, _ := expandTabs(clipLine(snap.Line(i)))
-				rows = len(diffBreaks(shown, cols, true)) - 1
+				rows = len(diffBreaks(a.font, shown, cols, true)) - 1
 			}
 			v.tops[i+1] = v.tops[i] + float32(rows)*a.font.lineH
 		}

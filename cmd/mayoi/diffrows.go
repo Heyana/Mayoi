@@ -5,6 +5,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"golang.org/x/text/width"
+
 	"mayoi/internal/linediff"
 )
 
@@ -241,6 +243,17 @@ func (s *diffSide) window() *lineWindow {
 	return s.win
 }
 
+// runeCols returns how many monospace columns r takes: two for wide East
+// Asian glyphs and one otherwise.
+func runeCols(r rune) int {
+	switch width.LookupRune(r).Kind() {
+	case width.EastAsianWide, width.EastAsianFullwidth:
+		return 2
+	default:
+		return 1
+	}
+}
+
 // wrapAt returns where the rows of a line after the first start, as it
 // wraps at cols columns, in bytes of shown, the line with its tabs
 // expanded: after the last space that fits, when there is one past the
@@ -253,8 +266,9 @@ func wrapAt(shown string, cols int) []int {
 	start, col := 0, 0
 	space, spaceCol := -1, 0 // after the row's last space, and its column
 	for i, r := range shown {
-		if col >= cols {
-			if space > start && spaceCol > cols/2 {
+		w := runeCols(r)
+		if col > 0 && col+w > cols {
+			if space > start && spaceCol > cols/2 && col-spaceCol+w <= cols {
 				out = append(out, space)
 				start, col = space, col-spaceCol
 			} else {
@@ -263,10 +277,66 @@ func wrapAt(shown string, cols int) []int {
 			}
 			space = -1
 		}
-		col++
+		col += w
 		if r == ' ' {
 			space, spaceCol = i+1, col
 		}
+	}
+	return out
+}
+
+// diffWrapAt returns where the rows of shown after the first start, as it
+// wraps within cols cells of f. ASCII lines count cells directly; lines with
+// other characters wrap to f's measured width so wide glyphs never overflow.
+func diffWrapAt(f codeFont, shown string, cols int) []int {
+	if cols < 1 || f.charW <= 0 || isASCII(shown) {
+		return wrapAt(shown, cols)
+	}
+	maxW := float32(cols) * f.charW
+	if f.width(shown) <= maxW {
+		return nil
+	}
+	var out []int
+	for start := 0; start < len(shown); {
+		if f.width(shown[start:]) <= maxW {
+			break
+		}
+		end, col := start, 0
+		for i, r := range shown[start:] {
+			w := runeCols(r)
+			if col > 0 && col+w > cols {
+				end = start + i
+				break
+			}
+			col += w
+			end = start + i + utf8.RuneLen(r)
+		}
+		for end > start && f.width(shown[start:end]) > maxW {
+			_, n := utf8.DecodeLastRuneInString(shown[start:end])
+			end -= n
+		}
+		for end < len(shown) {
+			_, n := utf8.DecodeRuneInString(shown[end:])
+			if f.width(shown[start:end+n]) > maxW {
+				break
+			}
+			end += n
+		}
+		if end <= start {
+			_, n := utf8.DecodeRuneInString(shown[start:])
+			end = start + n
+		}
+		if end >= len(shown) {
+			break
+		}
+		if sp := strings.LastIndexByte(shown[start:end], ' '); sp >= 0 {
+			after := start + sp + 1
+			if after > start && f.width(shown[start:after]) > maxW/2 {
+				end = after
+			}
+		}
+		out = append(out, end)
+		start = end
 	}
 	return out
 }
@@ -279,6 +349,16 @@ func wrapCount(text string, cols int) int {
 	}
 	shown, _ := expandTabs(clipLine(text))
 	return len(wrapAt(shown, cols)) + 1
+}
+
+// diffWrapCount returns how many rows a diff line takes as it wraps within
+// cols cells of f.
+func diffWrapCount(f codeFont, text string, cols int) int {
+	if cols < 1 || len(text) <= cols && strings.IndexByte(text, '\t') < 0 && isASCII(text) {
+		return 1
+	}
+	shown, _ := expandTabs(clipLine(text))
+	return len(diffWrapAt(f, shown, cols)) + 1
 }
 
 // clipLine returns as much of a line as a diff shows: the rest of a

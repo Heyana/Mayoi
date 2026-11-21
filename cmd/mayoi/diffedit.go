@@ -444,7 +444,7 @@ func (a *app) diffEditPointerDown(v *diffView, e *diffEdit, ev ui.InputEvent) bo
 // on the row of the line that y is in, as it wraps at cols columns.
 func diffCaretCol(f codeFont, text string, x, y float32, lineH float32, cols int, wrap bool) int {
 	shown, at := expandTabs(text)
-	breaks := diffBreaks(shown, cols, wrap)
+	breaks := diffBreaks(f, shown, cols, wrap)
 	k := min(max(int(y/lineH), 0), len(breaks)-2)
 	lo, hi := breaks[k], breaks[k+1]
 	b, runes := 0, 0
@@ -474,7 +474,7 @@ func diffCaretCol(f codeFont, text string, x, y float32, lineH float32, cols int
 // shows, and on which row of the line, as it wraps at cols columns.
 func diffCaretX(f codeFont, text string, col, cols int, wrap bool) (x float32, row int) {
 	shown, at := expandTabs(text)
-	breaks := diffBreaks(shown, cols, wrap)
+	breaks := diffBreaks(f, shown, cols, wrap)
 	b := 0
 	for i, runes := 0, 0; i < len(text) && runes < col; {
 		_, n := utf8.DecodeRuneInString(text[i:])
@@ -493,10 +493,10 @@ func diffCaretX(f codeFont, text string, col, cols int, wrap bool) (x float32, r
 
 // diffBreaks returns where the rows of a line shown start and end, as it
 // wraps at cols columns: none when it does not.
-func diffBreaks(shown string, cols int, wrap bool) []int {
+func diffBreaks(f codeFont, shown string, cols int, wrap bool) []int {
 	breaks := []int{0}
 	if wrap {
-		breaks = append(breaks, wrapAt(shown, cols)...)
+		breaks = append(breaks, diffWrapAt(f, shown, cols)...)
 	}
 	breaks = append(breaks, len(shown))
 	return breaks
@@ -819,7 +819,7 @@ func (a *app) paintDiffEdit(pt *ui.Painter, v *diffView, e *diffEdit, l diffGeom
 // where the row shows.
 func diffSelRects(fnt codeFont, text string, from, to int, x, y float32, cols int, wrap bool) []ui.Rect {
 	shown, at := expandTabs(text)
-	breaks := diffBreaks(shown, cols, wrap)
+	breaks := diffBreaks(fnt, shown, cols, wrap)
 	b0 := at(min(runeByte(text, from), len(text)))
 	b1 := at(min(runeByte(text, to), len(text)))
 	var out []ui.Rect

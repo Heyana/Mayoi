@@ -1579,13 +1579,13 @@ func (a *app) layoutRows(v *diffView, l diffGeometry) {
 			f := v.files[r.file]
 			if v.split {
 				if r.old >= 0 {
-					r.h = wrapCount(f.old.lines[r.old], l.cols[0])
+					r.h = diffWrapCount(a.diffFont, f.old.lines[r.old], l.cols[0])
 				}
 				if r.new >= 0 {
-					r.h = max(r.h, wrapCount(f.new.lines[r.new], l.cols[1]))
+					r.h = max(r.h, diffWrapCount(a.diffFont, f.new.lines[r.new], l.cols[1]))
 				}
 			} else if n, newSide := r.line(); n >= 0 {
-				r.h = wrapCount(f.side(newSide).lines[n], l.cols[0])
+				r.h = diffWrapCount(a.diffFont, f.side(newSide).lines[n], l.cols[0])
 			}
 		}
 	}
@@ -1620,13 +1620,13 @@ func (a *app) layoutRows(v *diffView, l diffGeometry) {
 				if r.old >= 0 {
 					hL = 1
 					if b.wrap {
-						hL = wrapCount(f.old.lines[r.old], l.cols[0])
+						hL = diffWrapCount(a.diffFont, f.old.lines[r.old], l.cols[0])
 					}
 				}
 				if r.new >= 0 {
 					hR = 1
 					if b.wrap {
-						hR = wrapCount(f.new.lines[r.new], l.cols[1])
+						hR = diffWrapCount(a.diffFont, f.new.lines[r.new], l.cols[1])
 					}
 				}
 			}
