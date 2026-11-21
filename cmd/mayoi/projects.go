@@ -44,16 +44,19 @@ const (
 	railMaxW = 200
 )
 
-// railPad is the room over a name on its square, both sides.
-const railPad float32 = 28
+// railInset is the room the rail keeps at both its edges, which a row
+// leaves.
+const railInset float32 = 8
 
-// railNameSize is the size of a project's name on its square, railLogo the
-// side of the logo it shows before the name, and railTextLead the room the
-// logo column takes, so that the names line up.
+// railPad is the room a name takes beside its row: both insets, the mark
+// before it, and the room after it.
+const railPad float32 = 2*railInset + 7 + railLogo + 7 + 8
+
+// railNameSize is the size of a project's name on its row, and railLogo the
+// side of the mark it shows before it.
 const (
 	railNameSize float32 = 13
-	railLogo             = 20
-	railTextLead float32 = railLogo + 9
+	railLogo     float32 = 20
 )
 
 // frame is a native window of the app. It shows one project, or with
@@ -572,7 +575,7 @@ func (f *frame) rail() float32 {
 func railWidthFor(names []string) float32 {
 	w := float32(railW)
 	for _, name := range names {
-		w = max(w, labelShape(name, railNameSize).w+railPad+railTextLead)
+		w = max(w, labelShape(name, railNameSize).w+railPad)
 	}
 	return min(w, railMaxW)
 }
@@ -614,11 +617,11 @@ func (f *frame) railView(c *ui.Context, a *app) {
 	// whether a project has a logo or not.
 	labels := make([]string, len(tabs))
 	for i, name := range names {
-		labels[i] = railFitShort(name, width-railPad-railTextLead)
+		labels[i] = railFitShort(name, width-railPad)
 	}
 	rail.Children(func() {
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-			ui.Column(c).FillWidth().Padding(12, 8, 12, 8).Gap(4).AlignItems(ui.Center).Children(func() {
+			ui.Column(c).FillWidth().Padding(12, railInset, 12, railInset).Gap(6).AlignItems(ui.Center).Children(func() {
 				for i, h := range tabs {
 					f.railTab(c, a, h, i, labels[i])
 				}
@@ -884,7 +887,9 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 	if dir != "" && h.needsLogoScan(dir, icon) {
 		f.scanProjectLogo(a, h, dir, icon)
 	}
-	b := ui.ButtonBase(c.Key(fmt.Sprintf("project-%d", h.a.window.ID))).Width(f.rail()).Height(railSquare).Shrink(0).
+	// The row leaves the rail's inset at both edges: it is the rail's
+	// width less both.
+	b := ui.ButtonBase(c.Key(fmt.Sprintf("project-%d", h.a.window.ID))).Width(f.rail() - 2*railInset).Height(railSquare).Shrink(0).
 		Label(name).Description(railDescription(where, work)).Drag(railDrag{h})
 	f.railTip(c, a, b, name, where, keys, dirty, work, alert, h.a.alertState, alertCol, conn, connCol)
 	f.railDrop(b, a, h)
@@ -950,7 +955,7 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 			pt.Fill(ui.Rect{X: r.X + (r.W-24)/2, Y: r.Y - 4, W: 24, H: 2}, p.accent, 1)
 		}
 		s := float32(railSquare) - 2*sink
-		sq := ui.Rect{X: r.X + 1, Y: r.Y + (r.H-s)/2, W: max(r.W-2, s), H: s}
+		sq := ui.Rect{X: r.X, Y: r.Y + (r.H-s)/2, W: max(r.W, s), H: s}
 		alpha := float32(1)
 		if dragged {
 			alpha = 0.4
@@ -1344,7 +1349,7 @@ func railInitials(name string) (string, []rune) {
 // dragged over the rail.
 func (f *frame) railAdd(c *ui.Context, a *app, folders bool) {
 	p := a.pal
-	b := ui.ButtonBase(c.Key("rail-add")).Size(f.rail(), railSquare+4).Shrink(0).Label(locales.CmdFileOpenFolder()).
+	b := ui.ButtonBase(c.Key("rail-add")).Size(f.rail()-2*railInset, railSquare+4).Shrink(0).Label(locales.CmdFileOpenFolder()).
 		Tooltip(a.withKey(locales.CmdFileOpenFolder(), "file.openFolder"))
 	hot := b.Hovered() || folders
 	k := b.Animate("hot", unit(hot), 120*time.Millisecond)
