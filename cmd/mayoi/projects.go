@@ -570,6 +570,18 @@ func (f *frame) rail() float32 {
 	return max(f.railWidth, railW)
 }
 
+// railTitle is what a project's row calls it: the label a person gave it,
+// else the name of its folder.
+func railTitle(s *settings.Settings, dir string) string {
+	if dir != "" {
+		if own := railLabel(s.ProjectTabStyle[dir].Label); own != "" {
+			return own
+		}
+	}
+	name, _ := railName(dir)
+	return name
+}
+
 // railWidthFor is how wide the rail is for the names of its projects and
 // the counts at the end of their rows: enough for the longest of each,
 // within railW and railMaxW.
@@ -605,7 +617,7 @@ func (f *frame) railView(c *ui.Context, a *app) {
 	tabs := slices.Clone(f.tabs)
 	names := make([]string, len(tabs))
 	for i, h := range tabs {
-		names[i], _ = railName(h.a.folder())
+		names[i] = railTitle(f.m.s, h.a.folder())
 	}
 	var counts float32
 	for _, h := range tabs {

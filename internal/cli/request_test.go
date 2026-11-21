@@ -67,6 +67,9 @@ func TestParse(t *testing.T) {
 		{[]string{"projects", "list"}, Request{Projects: &Projects{Verb: "list"}}},
 		{[]string{"projects", "add", "a", x}, Request{Projects: &Projects{Verb: "add", Folders: []string{abs("a"), x}}}},
 		{[]string{"projects", "rm", "a"}, Request{Projects: &Projects{Verb: "remove", Folders: []string{abs("a")}}}},
+		{[]string{"projects", "label", "a", "Thing, the engine"}, Request{Projects: &Projects{Verb: "label",
+			Folders: []string{abs("a")}, Label: "Thing, the engine", HasLabel: true}}},
+		{[]string{"projects", "unlabel", "a"}, Request{Projects: &Projects{Verb: "unlabel", Folders: []string{abs("a")}}}},
 	} {
 		c.want.Cwd = cwd
 		got, err := Parse(c.args, cwd)
@@ -84,6 +87,7 @@ func TestParse(t *testing.T) {
 		{"settings", "set", "-=x"}, {"settings", "--disable-plugins"},
 		{"projects", "x"}, {"projects", "list", "a"}, {"projects", "add"}, {"projects", "remove"},
 		{"projects", "add", "a", "-n"}, {"projects", "add", "a", "--window", "p"},
+		{"projects", "label", "a"}, {"projects", "label", "a", "x", "y"}, {"projects", "unlabel"}, {"projects", "unlabel", "a", "b"},
 	} {
 		if _, err := Parse(args, cwd); err == nil {
 			t.Errorf("Parse(%q) took it", args)

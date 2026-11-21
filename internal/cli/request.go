@@ -58,8 +58,13 @@ type Target struct {
 type Projects struct {
 	// Verb is "list", "add" or "remove", "" for a list.
 	Verb string `json:"verb,omitempty"`
-	// Folders are the folders to add or to remove, absolute.
+	// Folders are the folders to add or to remove, absolute, or the one
+	// a label names.
 	Folders []string `json:"folders,omitempty"`
+	// Label is the text a label gives the folder, which it forgets when
+	// it is empty, and HasLabel says a label was given at all.
+	Label    string `json:"label,omitempty"`
+	HasLabel bool   `json:"hasLabel,omitempty"`
 }
 
 // Command is a command of the app by its identifier, as the command
@@ -143,6 +148,8 @@ const Usage = `Usage: mayoi [options] [folder or file]...
        mayoi run <command>[=<argument>]...
        mayoi commands
        mayoi projects [list | add <folder>... | remove <folder>...]
+       mayoi projects label <folder> <text>
+       mayoi projects unlabel <folder>
 
 Opens folders and files in Mayoi, starting it if it isn't running.
 
@@ -174,11 +181,14 @@ Commands:
                     one in front. Some take an argument after =, as
                     file.openFolder=<folder> or go.line=<line[:column]>.
   commands          List the commands, their names, shortcuts and arguments
-  projects          List the projects of the rail, one folder a line, add
-                    folders to it, or take them away. add puts a folder on
-                    the rail as a person opening it would, and remove closes
-                    it, keeping its session for the next time. A folder
-                    already on the rail is left as it is.
+  projects          List the projects of the rail, one folder a line with
+                    its label after a tab, add folders to it, take them away,
+                    or give one a label. add puts a folder on the rail as a
+                    person opening it would, and remove closes it, keeping
+                    its session for the next time. A folder already on the
+                    rail is left as it is. label names the project on the
+                    rail, where its folder's name would be, and unlabel
+                    gives it back its folder's name.
   plugin <command>  Install, update, remove, write and pack plugins: see
                     mayoi plugin --help
 
@@ -199,6 +209,7 @@ Examples:
   mayoi projects
   mayoi projects add ~/src/thing ~/src/other
   mayoi projects remove ~/src/other
+  mayoi projects label ~/src/thing 'Thing: the engine'
 `
 
 // Parse reads the mayoi command's arguments, run in cwd.
@@ -355,7 +366,7 @@ func (p *Projects) word(arg string) error {
 		case "list":
 			p.Verb = "list"
 			return nil
-		case "add", "remove", "rm":
+		case "add", "remove", "rm", "label", "unlabel":
 			if arg == "rm" {
 				arg = "remove"
 			}
@@ -366,6 +377,24 @@ func (p *Projects) word(arg string) error {
 	}
 	if p.Verb == "list" {
 		return fmt.Errorf("list takes no %q: mayoi projects add <folder> adds one", arg)
+	}
+	if p.Verb == "unlabel" {
+		if len(p.Folders) > 0 {
+			return errors.New("unlabel takes one folder: mayoi projects unlabel <folder>")
+		}
+		p.Folders = append(p.Folders, arg)
+		return nil
+	}
+	if p.Verb == "label" {
+		switch {
+		case len(p.Folders) == 0:
+			p.Folders = append(p.Folders, arg)
+		case !p.HasLabel:
+			p.Label, p.HasLabel = arg, true
+		default:
+			return errors.New("a label takes a folder and one text: mayoi projects label <folder> <text>")
+		}
+		return nil
 	}
 	p.Folders = append(p.Folders, arg)
 	return nil
@@ -378,6 +407,14 @@ func (p *Projects) check() error {
 	case "add", "remove":
 		if len(p.Folders) == 0 {
 			return fmt.Errorf("%s needs a folder: mayoi projects %s <folder>", p.Verb, p.Verb)
+		}
+	case "label":
+		if len(p.Folders) == 0 || !p.HasLabel {
+			return errors.New("label takes a folder and one text: mayoi projects label <folder> <text>")
+		}
+	case "unlabel":
+		if len(p.Folders) == 0 {
+			return errors.New("unlabel takes one folder: mayoi projects unlabel <folder>")
 		}
 	default:
 		if len(p.Folders) > 0 {

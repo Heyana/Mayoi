@@ -27,6 +27,7 @@ needs a `## <version>` section here, or its build fails.
 - The rail counts the files changed of every project as its window opens, and fetches alone: a remote that does not answer holds back neither the count nor the reads after it.
 - The rail shows the counts of a project whose tab has not been switched to yet, rather than only once it is.
 - `mayoi projects` lists the projects of the rail, adds folders to it, and removes them, so a script or an agent can register its own projects.
+- `mayoi projects list` says each project's label beside its folder, and `mayoi projects label` and `unlabel` name a project on the rail.
 - The Markdown Reading view shows an HTML `<table>` as a table, with its cells' alignment and pictures.
 - HTML `<ul>`, `<ol>` and `<li>` show as lists in the Reading view, nested and numbered.
 - A `<details>` folds under its `<summary>` in the Reading view; click the summary to open it.

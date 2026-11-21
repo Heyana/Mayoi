@@ -156,11 +156,15 @@ func (m *mayoi) serve(req cli.Request, reply func(cli.Reply)) {
 func (m *mayoi) serveProjects(p *cli.Projects, reply func(cli.Reply), fail func(string, ...any)) {
 	switch p.Verb {
 	case "", "list":
+		// A folder a line, its label after a tab where it has one, so a
+		// caller reads both without asking twice.
 		var out strings.Builder
 		for _, h := range m.wins {
-			if dir := h.a.folder(); dir != "" {
-				out.WriteString(dir + "\n")
+			dir := h.a.folder()
+			if dir == "" {
+				continue
 			}
+			fmt.Fprintf(&out, "%s\t%s\n", dir, m.s.ProjectTabStyle[dir].Label)
 		}
 		reply(cli.Reply{Output: out.String()})
 	case "add":
@@ -179,6 +183,15 @@ func (m *mayoi) serveProjects(p *cli.Projects, reply func(cli.Reply), fail func(
 			out.WriteString(dir + "\n")
 		}
 		reply(cli.Reply{Output: out.String()})
+	case "label", "unlabel":
+		// The label is a look of the project of a folder, kept in the
+		// settings: the app reads it again as it draws the rail. Unlabel
+		// comes with no text, which forgets it.
+		dir := p.Folders[0]
+		st := m.s.ProjectTabStyle[dir]
+		st.Label = p.Label
+		m.s.SetTabStyle(dir, st)
+		reply(cli.Reply{Output: dir + "\n"})
 	case "remove":
 		var hs []*desktop
 		for _, dir := range p.Folders {
