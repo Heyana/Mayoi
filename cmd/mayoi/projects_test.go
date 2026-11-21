@@ -477,28 +477,34 @@ func TestRailCompactShowsNamesAlone(t *testing.T) {
 	}
 }
 
-// The rail's two tools turn one state to the other, a click at a time.
-func TestRailToolsToggle(t *testing.T) {
+// The rail's switches make the state clicked the one shown, as the
+// sidebar's view switches do, rather than turn a switch the other way.
+func TestRailSwitchesSetStates(t *testing.T) {
 	dirs := []string{workspaceFixture(t), workspaceFixture(t)}
 	f, _, _ := railFixture(t, dirs...)
 	if f.m.s.RailOrder != "" || f.m.s.RailRows != "" {
-		t.Fatalf("the rail starts %q/%q, want the defaults", f.m.s.RailOrder, f.m.s.RailRows)
+		t.Fatalf("the rail starts %q/%q, want what moved last and both lines", f.m.s.RailOrder, f.m.s.RailRows)
 	}
-	f.toggleRailOrder()
-	if f.m.s.RailOrder != "manual" {
-		t.Fatalf("the order is %q after a click, want manual", f.m.s.RailOrder)
-	}
-	f.toggleRailOrder()
+	// Clicking the state already shown changes nothing.
+	f.setRailOrder("")
 	if f.m.s.RailOrder != "" {
-		t.Fatalf("the order is %q after two clicks, want what moved last", f.m.s.RailOrder)
+		t.Fatalf("the order is %q, want what moved last", f.m.s.RailOrder)
 	}
-	f.toggleRailRows()
+	f.setRailOrder("manual")
+	if f.m.s.RailOrder != "manual" {
+		t.Fatalf("the order is %q after manual is clicked, want manual", f.m.s.RailOrder)
+	}
+	f.setRailOrder("")
+	if f.m.s.RailOrder != "" {
+		t.Fatalf("the order is %q after what moved last is clicked, want it", f.m.s.RailOrder)
+	}
+	f.setRailRows("compact")
 	if f.m.s.RailRows != "compact" {
-		t.Fatalf("the rows are %q after a click, want compact", f.m.s.RailRows)
+		t.Fatalf("the rows are %q after compact is clicked, want compact", f.m.s.RailRows)
 	}
-	f.toggleRailRows()
+	f.setRailRows("")
 	if f.m.s.RailRows != "" {
-		t.Fatalf("the rows are %q after two clicks, want both lines", f.m.s.RailRows)
+		t.Fatalf("the rows are %q after both lines is clicked, want them", f.m.s.RailRows)
 	}
 }
 

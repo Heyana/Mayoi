@@ -5,7 +5,7 @@ needs a `## <version>` section here, or its build fails.
 
 ## Unreleased
 
-- The rail has two switches at its top: the order it keeps its projects in (what moved last, or the order dragged), and how tall a row is, with the lines and time or the name alone. Both are kept in the settings.
+- The rail has four switches at its top, on the row of the sidebar's own and in its size: the order it keeps its projects in (what moved last or the order dragged), and how much of a row it shows (its name with the lines of its work and the time, or the name alone). Each lit while it is the state shown, and a click makes it that state, as a view of the sidebar is switched to. Both states are kept in the settings.
 - Dragging a project to a place keeps that order, rather than being taken away by the next project that moves.
 
 - Each row of the project rail takes a second line under its name: the lines the work tree gained and lost (`+12 −3`), and when the project last moved (`刚刚`, `11:17`, `11-18`).

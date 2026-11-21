@@ -684,78 +684,73 @@ func (f *frame) railView(c *ui.Context, a *app) {
 	})
 }
 
-// railTools are the rail's own controls, at its top, over its projects:
-// how it orders them and how much of a row it shows. They are icons, as a
-// toolbar's are, and a click turns each to the other state.
+// railTools are the rail's own controls, at its top, on the header's row
+// beside the sidebar's: the order it keeps its projects in, and how much
+// of a row it shows. Each is a switch, as the sidebar's views are: the one
+// its state is shows lit, and a click makes another the state, never a
+// turn of a switch.
 func (f *frame) railTools(c *ui.Context, a *app) {
 	manual := f.m.s.RailOrder == "manual"
 	compact := f.m.s.RailRows == "compact"
-	w := f.rail() - 2*railInset
-	side := min((w-12-8)/2, float32(20))
-	// The icons start where the marks of the rows do, and the row of them
-	// sits as close under the first project as a project sits to another.
-	ui.Row(c.Key("rail-tools")).Width(w).Gap(8).Children(func() {
-		// The icons line up with the marks of the rows: the same inset the
-		// row keeps before its own.
-		ui.Box(c).Width(4).Height(side).Shrink(0)
-		f.railTool(c, a, "rail-sort", iconSort, !manual, side,
-			locales.RailSortActivity(), locales.RailSortManual(), f.toggleRailOrder)
-		icon := iconRows
-		if compact {
-			icon = iconList
-		}
-		f.railTool(c, a, "rail-rows", icon, !compact, side,
-			locales.RailRowsFull(), locales.RailRowsCompact(), f.toggleRailRows)
+	// As the sidebar's own header: the height, the paddings and the gap
+	// between its switches.
+	ui.Row(c.Key("rail-tools")).MinHeight(34).Padding(0, 6, 0, 8).Gap(2).AlignItems(ui.Center).Wrap().Children(func() {
+		f.railSwitch(c, a, "rail-sort-activity", iconSort, !manual,
+			a.withKey(locales.RailSortActivity(), "rail.sortActivity"), func() { f.setRailOrder("") })
+		f.railSwitch(c, a, "rail-sort-manual", iconGrip, manual,
+			locales.RailSortManual(), func() { f.setRailOrder("manual") })
+		f.railSwitch(c, a, "rail-rows-full", iconRows, !compact,
+			locales.RailRowsFull(), func() { f.setRailRows("") })
+		f.railSwitch(c, a, "rail-rows-compact", iconList, compact,
+			locales.RailRowsCompact(), func() { f.setRailRows("compact") })
 	})
 }
 
-// toggleRailOrder turns the rail from what moved last to the order dragged
-// and back.
-func (f *frame) toggleRailOrder() {
-	if f.m.s.RailOrder == "manual" {
-		f.m.s.RailOrder = ""
-	} else {
-		f.m.s.RailOrder = "manual"
-	}
-	f.m.s.Changed()
-}
-
-// toggleRailRows turns a project's row from two lines to its name alone and
-// back.
-func (f *frame) toggleRailRows() {
-	if f.m.s.RailRows == "compact" {
-		f.m.s.RailRows = ""
-	} else {
-		f.m.s.RailRows = "compact"
-	}
-	f.m.s.Changed()
-}
-
-// railTool is one control of the rail's tools: an icon lit when its state
-// is on, and a tip that says what a click turns it to.
-func (f *frame) railTool(c *ui.Context, a *app, key string, icon *ui.SVG, on bool, side float32, tipOn, tipOff string, toggle func()) {
+// railSwitch is one of the rail's states: lit while it is the one shown,
+// and a click makes it shown.
+func (f *frame) railSwitch(c *ui.Context, a *app, key string, icon *ui.SVG, on bool, label string, show func()) {
 	p := a.pal
-	tip := tipOff
-	if on {
-		tip = tipOn
+	b := ui.ButtonBase(c.Key(key)).Size(26, 24).Radius(5).Justify(ui.Center).AlignItems(ui.Center).Label(label).Tooltip(label)
+	col := p.muted
+	switch {
+	case on:
+		col = p.text
+	case b.Hovered():
+		b.Background(p.hover)
+		col = p.text
 	}
-	b := ui.ButtonBase(c.Key(key)).Size(side, side).Shrink(0).Tooltip(tip)
-	k := b.Animate("hot", unit(b.Hovered()), 120*time.Millisecond)
-	ink := p.muted.Mix(p.text, unit(on))
-	ink = ink.Mix(p.accent, k*0.6)
-	b.Draw(func(pt *ui.Painter, r ui.Rect) {
-		if k > 0.01 {
-			pt.Fill(r, p.hover.Alpha(0.5*k), 6)
-		}
-	})
+	b.Transition(hoverFade)
+	pressPose(b)
 	b.Children(func() {
-		ui.Box(c).Absolute().Fill().Justify(ui.Center).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, icon).FontSize(14).TextColor(ink)
-		})
+		if on {
+			// The mark of the state shown.
+			ui.Box(c.Key("on")).Absolute().Left(0).Right(0).Top(0).Bottom(0).Radius(5).Background(p.active)
+		}
+		ui.Icon(c, icon).FontSize(14).TextColor(col)
 	})
 	if b.Clicked() {
-		toggle()
+		show()
 	}
+}
+
+// setRailOrder makes the order of the rail's projects the one given: ""
+// for what moved last, "manual" for the order dragged.
+func (f *frame) setRailOrder(v string) {
+	if f.m.s.RailOrder == v {
+		return
+	}
+	f.m.s.RailOrder = v
+	f.m.s.Changed()
+}
+
+// setRailRows makes a project's row the one given: "" for its name with
+// the lines of its work and the time, "compact" for the name alone.
+func (f *frame) setRailRows(v string) {
+	if f.m.s.RailRows == v {
+		return
+	}
+	f.m.s.RailRows = v
+	f.m.s.Changed()
 }
 
 // railGround is the rail's background: a shade off the sidebar's, as an
