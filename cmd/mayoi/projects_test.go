@@ -275,6 +275,46 @@ func TestRailSquareCountsTheChangesOfAnotherProject(t *testing.T) {
 	}
 }
 
+// The squares of the rail name their projects, and the rail is as wide as
+// the longest name, within railW and railMaxW.
+func TestRailNamesItsProjects(t *testing.T) {
+	root := t.TempDir()
+	var dirs []string
+	for _, name := range []string{"mayoi", "code-lab"} {
+		dir := filepath.Join(root, name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		dirs = append(dirs, dir)
+	}
+	f, _, tt := railFixture(t, dirs...)
+	for _, dir := range dirs {
+		if _, ok := tt.Find(filepath.Base(dir)); !ok {
+			t.Fatalf("no square named %q: %v", filepath.Base(dir), tt.Texts())
+		}
+	}
+	if want := railWidthFor([]string{"mayoi", "code-lab"}); f.rail() != want {
+		t.Errorf("the rail is %v wide, want %v", f.rail(), want)
+	}
+	// A name longer than the rail's most is cut to it, its end in an
+	// ellipsis, and the rail holds at railMaxW.
+	long := strings.Repeat("a-very-long-repository-name-", 4)
+	if got := railWidthFor([]string{long}); got != railMaxW {
+		t.Errorf("a long name gives a rail %v wide, want %v", got, float32(railMaxW))
+	}
+	if got := railFitShort(long, railMaxW-railPad); !strings.HasSuffix(got, "…") {
+		t.Errorf("a long name not cut: %q", got)
+	}
+	if dir := os.Getenv("SHOTS"); dir != "" {
+		out, err := os.Create(filepath.Join(dir, "rail-names.png"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer out.Close()
+		png.Encode(out, tt.Image())
+	}
+}
+
 func TestProjectWords(t *testing.T) {
 	for name, want := range map[string]string{
 		"mayoi": "M", "my-app": "MA", "mayoi_editor": "ME", "mayoiEditor": "ME", "go.dev": "GD", "": "?",

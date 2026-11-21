@@ -285,7 +285,7 @@ func (a *app) sidePanel(c *ui.Context, right bool) {
 		room -= w.SidebarWidth
 	}
 	if a.rail != nil {
-		room -= railW
+		room -= max(a.railWidth, railW)
 	}
 	room = max(room, minPanelW)
 	size := clamp(w.PanelWidth, minPanelW, room)

@@ -156,6 +156,9 @@ type host interface {
 type app struct {
 	host     host
 	settings *settings.Settings
+	// railWidth is how wide the window's rail of projects is, as it drew
+	// it last, 0 until then.
+	railWidth float32
 	// folderPrefs is what the folder chooses of the preferences, nil
 	// without a folder.
 	folderPrefs *folderPrefs

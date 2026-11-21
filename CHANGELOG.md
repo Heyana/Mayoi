@@ -19,6 +19,7 @@ needs a `## <version>` section here, or its build fails.
 - A diff draws its lines a size below the editor's, and the lists of source control a size above theirs, so the two read together.
 - A diff of one Markdown file shows it rendered, in reading view, from a button of its breadcrumbs.
 - The square of each project on the rail counts the files its work tree has changed, so another project shows its own on a switch to it.
+- The rail names each project on its square, the rail as wide as the longest name and no wider than 200.
 - The Markdown Reading view shows an HTML `<table>` as a table, with its cells' alignment and pictures.
 - HTML `<ul>`, `<ol>` and `<li>` show as lists in the Reading view, nested and numbered.
 - A `<details>` folds under its `<summary>` in the Reading view; click the summary to open it.

@@ -37,8 +37,18 @@ import (
 	"mayoi/locales"
 )
 
-// railW is the width of the rail of project tabs.
-const railW = 48
+// railW is the width the rail takes for the squares alone, and railMaxW
+// its widest, for the names written on them.
+const (
+	railW    = 48
+	railMaxW = 200
+)
+
+// railPad is the room over a name on its square, both sides.
+const railPad float32 = 14
+
+// railNameSize is the size of a project's name on its square.
+const railNameSize float32 = 13
 
 // frame is a native window of the app. It shows one project, or with
 // project tabs several, one at a time, which the rail on its left
@@ -50,6 +60,9 @@ type frame struct {
 	// one it shows.
 	tabs   []*desktop
 	active *desktop
+	// railWidth is how wide the rail it drew is, for the names of its
+	// projects: the squares alone, or as wide as the longest name.
+	railWidth float32
 	// services are the window's, which the projects it does not show post
 	// to, once it has drawn.
 	services    ui.Services
@@ -540,22 +553,59 @@ func (m *mayoi) projectTabsChanged() {
 // frame goes on building as a click shows another. A square is dragged
 // along the rail to reorder it, a folder dropped on the rail opens as a
 // project, and a picture dropped on a square shows in it.
+// rail is the width of the rail as it drew it last: its squares alone
+// until it has drawn.
+func (f *frame) rail() float32 {
+	return max(f.railWidth, railW)
+}
+
+// railWidthFor is how wide the rail is for the names of its projects:
+// enough for the longest of them, within railW and railMaxW.
+func railWidthFor(names []string) float32 {
+	w := float32(railW)
+	for _, name := range names {
+		w = max(w, labelShape(name, railNameSize).w+railPad)
+	}
+	return min(w, railMaxW)
+}
+
+// railFitShort cuts a name to the room its square has, its end in an
+// ellipsis.
+func railFitShort(name string, width float32) string {
+	if labelShape(name, railNameSize).w <= width {
+		return name
+	}
+	r := []rune(name)
+	for len(r) > 1 {
+		r = r[:len(r)-1]
+		if cut := string(r) + "\u2026"; labelShape(cut, railNameSize).w <= width {
+			return cut
+		}
+	}
+	return "\u2026"
+}
+
 func (f *frame) railView(c *ui.Context, a *app) {
 	if !f.m.s.ProjectTabs {
 		return
 	}
 	p := a.pal
-	rail := ui.Column(c.Key("rail")).Width(railW).Shrink(0).Background(railGround(p)).BorderWidth(0, 1, 0, 0).BorderColor(p.seam())
-	// Past the last square: at the end.
-	f.railDrop(rail, a, nil)
-	_, atEnd := ui.DragOver[railDrag](rail)
-	folders := rail.FileDragOver()
 	tabs := slices.Clone(f.tabs)
 	names := make([]string, len(tabs))
 	for i, h := range tabs {
 		names[i], _ = railName(h.a.folder())
 	}
-	labels := railLabels(names)
+	width := railWidthFor(names)
+	f.railWidth, a.railWidth = width, width
+	rail := ui.Column(c.Key("rail")).Width(width).Shrink(0).Background(railGround(p)).BorderWidth(0, 1, 0, 0).BorderColor(p.seam())
+	// Past the last square: at the end.
+	f.railDrop(rail, a, nil)
+	_, atEnd := ui.DragOver[railDrag](rail)
+	folders := rail.FileDragOver()
+	labels := make([]string, len(tabs))
+	for i, name := range names {
+		labels[i] = railFitShort(name, width-railPad)
+	}
 	rail.Children(func() {
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).FillWidth().Padding(8, 0, 10, 0).Gap(6).AlignItems(ui.Center).Children(func() {
@@ -814,7 +864,7 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 	if dir != "" && h.needsLogoScan(dir, icon) {
 		f.scanProjectLogo(a, h, dir, icon)
 	}
-	b := ui.ButtonBase(c.Key(fmt.Sprintf("project-%d", h.a.window.ID))).Width(railW).Height(railSquare + 4).Shrink(0).
+	b := ui.ButtonBase(c.Key(fmt.Sprintf("project-%d", h.a.window.ID))).Width(f.rail()).Height(railSquare + 4).Shrink(0).
 		Label(name).Description(railDescription(where, work)).Drag(railDrag{h})
 	f.railTip(c, a, b, name, where, keys, dirty, work, alert, h.a.alertState, alertCol, conn, connCol)
 	f.railDrop(b, a, h)
@@ -889,7 +939,7 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 			pt.Fill(ui.Rect{X: r.X - 2, Y: r.Y + (r.H-pill)/2, W: 5, H: pill}, pc, 2.5)
 		}
 		s := float32(railSquare) - 2*sink
-		sq := ui.Rect{X: r.X + (r.W-s)/2, Y: r.Y + (r.H-s)/2, W: s, H: s}
+		sq := ui.Rect{X: r.X + 1, Y: r.Y + (r.H-s)/2, W: max(r.W-2, s), H: s}
 		alpha := float32(1)
 		if dragged {
 			alpha = 0.4
@@ -1268,12 +1318,12 @@ func railInitials(name string) (string, []rune) {
 // dragged over the rail.
 func (f *frame) railAdd(c *ui.Context, a *app, folders bool) {
 	p := a.pal
-	b := ui.ButtonBase(c.Key("rail-add")).Size(railW, railSquare+4).Shrink(0).Label(locales.CmdFileOpenFolder()).
+	b := ui.ButtonBase(c.Key("rail-add")).Size(f.rail(), railSquare+4).Shrink(0).Label(locales.CmdFileOpenFolder()).
 		Tooltip(a.withKey(locales.CmdFileOpenFolder(), "file.openFolder"))
 	hot := b.Hovered() || folders
 	k := b.Animate("hot", unit(hot), 120*time.Millisecond)
 	b.Draw(func(pt *ui.Painter, r ui.Rect) {
-		sq := ui.Rect{X: r.X + (r.W-railSquare)/2, Y: r.Y + (r.H-railSquare)/2, W: railSquare, H: railSquare}
+		sq := ui.Rect{X: r.X + 1, Y: r.Y + (r.H-railSquare)/2, W: max(r.W-2, railSquare), H: railSquare}
 		if k > 0.01 {
 			pt.Fill(sq, p.accent.Alpha(0.14*k), railRadius)
 		}
