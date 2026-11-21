@@ -436,6 +436,72 @@ func TestRailRowShowsItsWork(t *testing.T) {
 	}
 }
 
+// A compact row keeps the name alone, and centers it: the rail is a
+// chooser then, not a dashboard.
+func TestRailCompactShowsNamesAlone(t *testing.T) {
+	root := t.TempDir()
+	var dirs []string
+	for _, name := range []string{"vmk-1.0", "code-lab", "nsgo"} {
+		dir := filepath.Join(root, name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		dirs = append(dirs, dir)
+	}
+	f, tabs, tt := railFixture(t, dirs...)
+	now := time.Now()
+	for i, h := range tabs {
+		h.added, h.deleted, h.changes = 100+i, 20, 3
+		h.activityAt = now.Add(-time.Duration(i) * time.Hour)
+	}
+	if got, _, _ := railRow(""); got != railRowH {
+		t.Fatalf("a full row is %v tall, want %v", got, float32(railRowH))
+	}
+	if got, nameY, subY := railRow("compact"); got != float32(railSquare) || nameY != float32(railSquare)/2 || subY != 0 {
+		t.Fatalf("a compact row is %v at %v/%v, want %v at %v", got, nameY, subY, float32(railSquare), float32(railSquare)/2)
+	}
+	f.m.s.RailRows = "compact"
+	step(tt)
+	// The lines of the work are not drawn, and the name is where one
+	// line's is.
+	if _, ok := tt.Find("+100"); ok {
+		t.Fatalf("a compact row still names its lines: %v", tt.Texts())
+	}
+	if dir := os.Getenv("SHOTS"); dir != "" {
+		out, err := os.Create(filepath.Join(dir, "rail-compact.png"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer out.Close()
+		png.Encode(out, tt.Image())
+	}
+}
+
+// The rail's two tools turn one state to the other, a click at a time.
+func TestRailToolsToggle(t *testing.T) {
+	dirs := []string{workspaceFixture(t), workspaceFixture(t)}
+	f, _, _ := railFixture(t, dirs...)
+	if f.m.s.RailOrder != "" || f.m.s.RailRows != "" {
+		t.Fatalf("the rail starts %q/%q, want the defaults", f.m.s.RailOrder, f.m.s.RailRows)
+	}
+	f.toggleRailOrder()
+	if f.m.s.RailOrder != "manual" {
+		t.Fatalf("the order is %q after a click, want manual", f.m.s.RailOrder)
+	}
+	f.toggleRailOrder()
+	if f.m.s.RailOrder != "" {
+		t.Fatalf("the order is %q after two clicks, want what moved last", f.m.s.RailOrder)
+	}
+	f.toggleRailRows()
+	if f.m.s.RailRows != "compact" {
+		t.Fatalf("the rows are %q after a click, want compact", f.m.s.RailRows)
+	}
+	f.toggleRailRows()
+	if f.m.s.RailRows != "" {
+		t.Fatalf("the rows are %q after two clicks, want both lines", f.m.s.RailRows)
+	}
+}
+
 // A row says what its branch has to do: the commits to push, to pull, and
 // the files changed, each count where the row has room for it.
 func TestRailCountsWhatItsBranchHasToDo(t *testing.T) {

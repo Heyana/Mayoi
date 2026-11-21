@@ -246,6 +246,12 @@ type Prefs struct {
 	// ProjectTabStyle is a project's own label, color and icon on the rail
 	// of project tabs, by its folder.
 	ProjectTabStyle map[string]TabStyle `json:"projectTabStyle,omitempty"`
+	// RailOrder is how the rail orders its projects: "activity", the one
+	// moved last first, or "manual", the order they were dragged to.
+	RailOrder string `json:"railOrder,omitempty"`
+	// RailRows is what a project's row shows: "full", its name and the
+	// lines of its work and when it moved, or "compact", its name alone.
+	RailRows string `json:"railRows,omitempty"`
 	// Locale is the language Mayoi shows, as "en", "zh-Hans" or "ja", or ""
 	// for the one the system's languages prefer.
 	Locale string `json:"locale,omitempty"`

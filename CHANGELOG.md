@@ -5,6 +5,9 @@ needs a `## <version>` section here, or its build fails.
 
 ## Unreleased
 
+- The rail has two switches at its top: the order it keeps its projects in (what moved last, or the order dragged), and how tall a row is, with the lines and time or the name alone. Both are kept in the settings.
+- Dragging a project to a place keeps that order, rather than being taken away by the next project that moves.
+
 - Each row of the project rail takes a second line under its name: the lines the work tree gained and lost (`+12 −3`), and when the project last moved (`刚刚`, `11:17`, `11-18`).
 - The rail sorts its projects by when they last moved, the one worked on last first: a commit of its branch, or a file of its work tree changed.
 

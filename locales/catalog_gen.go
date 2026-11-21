@@ -9374,6 +9374,46 @@ func (msgs Messages) RailResetIcon() string {
 	return Catalog.Format(msgs.locale, "railResetIcon", nil)
 }
 
+// RailRowsCompact says "Rows show the name alone · click for the lines and time"
+// in the language the app shows.
+func RailRowsCompact() string { return In(i18n.Locale()).RailRowsCompact() }
+
+// RailRowsCompact says "Rows show the name alone · click for the lines and time"
+// in the language of msgs.
+func (msgs Messages) RailRowsCompact() string {
+	return Catalog.Format(msgs.locale, "railRowsCompact", nil)
+}
+
+// RailRowsFull says "Rows show the lines and time · click for the name alone"
+// in the language the app shows.
+func RailRowsFull() string { return In(i18n.Locale()).RailRowsFull() }
+
+// RailRowsFull says "Rows show the lines and time · click for the name alone"
+// in the language of msgs.
+func (msgs Messages) RailRowsFull() string {
+	return Catalog.Format(msgs.locale, "railRowsFull", nil)
+}
+
+// RailSortActivity says "Sorted by what moved last · click for the order you set"
+// in the language the app shows.
+func RailSortActivity() string { return In(i18n.Locale()).RailSortActivity() }
+
+// RailSortActivity says "Sorted by what moved last · click for the order you set"
+// in the language of msgs.
+func (msgs Messages) RailSortActivity() string {
+	return Catalog.Format(msgs.locale, "railSortActivity", nil)
+}
+
+// RailSortManual says "The order you set · click to sort by what moved last"
+// in the language the app shows.
+func RailSortManual() string { return In(i18n.Locale()).RailSortManual() }
+
+// RailSortManual says "The order you set · click to sort by what moved last"
+// in the language of msgs.
+func (msgs Messages) RailSortManual() string {
+	return Catalog.Format(msgs.locale, "railSortManual", nil)
+}
+
 // RailUntitled says "Untitled"
 // in the language the app shows.
 func RailUntitled() string { return In(i18n.Locale()).RailUntitled() }

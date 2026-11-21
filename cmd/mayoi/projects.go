@@ -588,7 +588,7 @@ func railTitle(s *settings.Settings, dir string) string {
 func railWidthFor(names []string, counts float32) float32 {
 	w := float32(railW)
 	for _, name := range names {
-		w = max(w, labelShape(name, railNameSize).w+railPad+counts)
+		w = max(w, labelShape(name, railNameSize).w+railPad+counts+8)
 	}
 	return min(w, railMaxW)
 }
@@ -631,7 +631,11 @@ func (f *frame) railView(c *ui.Context, a *app) {
 	}
 	p := a.pal
 	now := time.Now()
-	tabs := railOrder(f.tabs, now)
+	tabs := f.tabs
+	if f.m.s.RailOrder != "manual" {
+		tabs = railOrder(f.tabs, now)
+	}
+	compact := f.m.s.RailRows == "compact"
 	names := make([]string, len(tabs))
 	for i, h := range tabs {
 		names[i] = railTitle(f.m.s, h.a.folder())
@@ -639,12 +643,18 @@ func (f *frame) railView(c *ui.Context, a *app) {
 	var counts, subs float32
 	for _, h := range tabs {
 		counts = max(counts, railChipsWidth(railChips(h, p)))
+		if compact {
+			continue
+		}
 		// The second line, both its ends: the lines of the work and
 		// when the project last moved. It takes what it needs of its
 		// own, the names keep the room they had.
 		subs = max(subs, railLinesWidth(h, p)+12+labelShape(railWhen(h.activityAt, now), railSubSize).w)
 	}
-	width := max(railWidthFor(names, counts), min(railPad+subs, railMaxW))
+	width := railWidthFor(names, counts)
+	if !compact {
+		width = max(width, min(railPad+subs, railMaxW))
+	}
 	f.railWidth, a.railWidth = width, width
 	rail := ui.Column(c.Key("rail")).Width(width).Shrink(0).Background(railGround(p)).BorderWidth(0, 1, 0, 0).BorderColor(p.seam())
 	// Past the last square: at the end.
@@ -658,6 +668,7 @@ func (f *frame) railView(c *ui.Context, a *app) {
 		labels[i] = railFitShort(name, width-railPad-counts)
 	}
 	rail.Children(func() {
+		f.railTools(c, a)
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).FillWidth().Padding(12, railInset, 12, railInset).Gap(6).AlignItems(ui.Center).Children(func() {
 				for i, h := range tabs {
@@ -671,6 +682,75 @@ func (f *frame) railView(c *ui.Context, a *app) {
 			})
 		})
 	})
+}
+
+// railTools are the rail's own controls, at its top, over its projects:
+// how it orders them and how much of a row it shows. They are icons, as a
+// toolbar's are, and a click turns each to the other state.
+func (f *frame) railTools(c *ui.Context, a *app) {
+	manual := f.m.s.RailOrder == "manual"
+	compact := f.m.s.RailRows == "compact"
+	w := f.rail() - 2*railInset
+	side := min((w-6)/2, float32(22))
+	ui.Row(c.Key("rail-tools")).Width(w).Gap(10).Margin(0, 0, 6, 0).Children(func() {
+		f.railTool(c, a, "rail-sort", iconSort, !manual, side,
+			locales.RailSortActivity(), locales.RailSortManual(), f.toggleRailOrder)
+		icon := iconRows
+		if compact {
+			icon = iconList
+		}
+		f.railTool(c, a, "rail-rows", icon, !compact, side,
+			locales.RailRowsFull(), locales.RailRowsCompact(), f.toggleRailRows)
+	})
+}
+
+// toggleRailOrder turns the rail from what moved last to the order dragged
+// and back.
+func (f *frame) toggleRailOrder() {
+	if f.m.s.RailOrder == "manual" {
+		f.m.s.RailOrder = ""
+	} else {
+		f.m.s.RailOrder = "manual"
+	}
+	f.m.s.Changed()
+}
+
+// toggleRailRows turns a project's row from two lines to its name alone and
+// back.
+func (f *frame) toggleRailRows() {
+	if f.m.s.RailRows == "compact" {
+		f.m.s.RailRows = ""
+	} else {
+		f.m.s.RailRows = "compact"
+	}
+	f.m.s.Changed()
+}
+
+// railTool is one control of the rail's tools: an icon lit when its state
+// is on, and a tip that says what a click turns it to.
+func (f *frame) railTool(c *ui.Context, a *app, key string, icon *ui.SVG, on bool, side float32, tipOn, tipOff string, toggle func()) {
+	p := a.pal
+	tip := tipOff
+	if on {
+		tip = tipOn
+	}
+	b := ui.ButtonBase(c.Key(key)).Size(side, side).Shrink(0).Tooltip(tip)
+	k := b.Animate("hot", unit(b.Hovered()), 120*time.Millisecond)
+	ink := p.muted.Mix(p.text, unit(on))
+	ink = ink.Mix(p.accent, k*0.6)
+	b.Draw(func(pt *ui.Painter, r ui.Rect) {
+		if k > 0.01 {
+			pt.Fill(r, p.hover.Alpha(0.5*k), 6)
+		}
+	})
+	b.Children(func() {
+		ui.Box(c).Absolute().Fill().Justify(ui.Center).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, icon).FontSize(15).TextColor(ink)
+		})
+	})
+	if b.Clicked() {
+		toggle()
+	}
 }
 
 // railGround is the rail's background: a shade off the sidebar's, as an
@@ -773,6 +853,12 @@ func (f *frame) move(h, before *desktop) {
 		at = i
 	}
 	f.tabs = slices.Insert(f.tabs, at, h)
+	// The order dragged is the one kept: sorting by what moved last would
+	// take it away as soon as another project changes.
+	if f.m.s.RailOrder != "manual" {
+		f.m.s.RailOrder = "manual"
+		f.m.s.Changed()
+	}
 	f.keepRail()
 	if f.win != nil {
 		f.win.Invalidate()
@@ -883,6 +969,16 @@ func railChipsWidth(cs []railChip) float32 {
 		w += labelShape(c.text, railChipSize).w
 	}
 	return w
+}
+
+// railRow is the height of a project's row, and the middle of its name and
+// of its second line within it: a compact row keeps the name alone, and
+// centers it.
+func railRow(rows string) (h, nameY, subY float32) {
+	if rows == "compact" {
+		return railSquare, railSquare / 2, 0
+	}
+	return railRowH, railNameY, railSubY
 }
 
 // railLines are the lines a project's work tree gained and lost, as its
@@ -1096,6 +1192,8 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 	if h.a.alertState != terminal.StatusIdle {
 		alertCol = a.progColor(h.a.alertState)
 	}
+	rowH, nameY, subY := railRow(f.m.s.RailRows)
+	compact := rowH == float32(railSquare)
 	work := projectWork(h.a)
 	// The badge's dot: a program that waits, as long as it does, before
 	// what was asked attention for.
@@ -1121,7 +1219,7 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 	}
 	// The row leaves the rail's inset at both edges: it is the rail's
 	// width less both.
-	b := ui.ButtonBase(c.Key(fmt.Sprintf("project-%d", h.a.window.ID))).Width(f.rail() - 2*railInset).Height(railRowH).Shrink(0).
+	b := ui.ButtonBase(c.Key(fmt.Sprintf("project-%d", h.a.window.ID))).Width(f.rail() - 2*railInset).Height(rowH).Shrink(0).
 		Label(name).Description(railDescription(where, work)).Drag(railDrag{h})
 	f.railTip(c, a, b, name, where, keys, dirty, work, alert, h.a.alertState, alertCol, conn, connCol)
 	f.railDrop(b, a, h)
@@ -1229,19 +1327,22 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 		at := chip.X + chip.W + 7
 		// Two lines: the name above, and under it the lines of its work
 		// and when it last moved.
-		pt.Glyphs(l.glyphs, at, r.Y+railNameY+l.mid, ink.Alpha(alpha))
+		pt.Glyphs(l.glyphs, at, r.Y+nameY+l.mid, ink.Alpha(alpha))
 		x := at
 		for i, c := range railLines(h, p) {
+			if compact {
+				break
+			}
 			if i > 0 {
 				x += railSubGap
 			}
 			sl := labelShape(c.text, railSubSize)
-			pt.Glyphs(sl.glyphs, x, r.Y+railSubY+sl.mid, c.col.Alpha(alpha))
+			pt.Glyphs(sl.glyphs, x, r.Y+subY+sl.mid, c.col.Alpha(alpha))
 			x += sl.w
 		}
-		if when := railWhen(h.activityAt, pt.Now()); when != "" {
+		if when := railWhen(h.activityAt, pt.Now()); when != "" && !compact {
 			sl := labelShape(when, railSubSize)
-			pt.Glyphs(sl.glyphs, sq.X+sq.W-8-sl.w, r.Y+railSubY+sl.mid, p.muted.Alpha(alpha))
+			pt.Glyphs(sl.glyphs, sq.X+sq.W-8-sl.w, r.Y+subY+sl.mid, p.muted.Alpha(alpha))
 		}
 		if conn != "" {
 			// At the corner the dots leave, cut out as they are, the
@@ -1285,7 +1386,7 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 			x := sq.X + sq.W - 8 - railChipsWidth(cs)
 			for _, c := range cs {
 				l := labelShape(c.text, railChipSize)
-				pt.Glyphs(l.glyphs, x, r.Y+railNameY+l.mid, c.col.Alpha(alpha))
+				pt.Glyphs(l.glyphs, x, r.Y+nameY+l.mid, c.col.Alpha(alpha))
 				x += l.w + 8
 			}
 		}
