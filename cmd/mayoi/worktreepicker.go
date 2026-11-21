@@ -84,6 +84,7 @@ func (a *gitContext) openWorktreePicker() {
 			if branch != "" {
 				w.from = branch + " (" + w.from + ")"
 			}
+			a.git.worktrees = slices.Clone(trees)
 			// A bare repository is not a checkout to switch to.
 			w.trees = slices.DeleteFunc(trees, func(t git.Worktree) bool { return t.Bare })
 			slices.SortStableFunc(w.trees, func(x, y git.Worktree) int { return btoi(!x.Current) - btoi(!y.Current) })

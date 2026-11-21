@@ -75,6 +75,33 @@ func TestScmCountsBranchesAndWorktrees(t *testing.T) {
 	hs.shot("scm-counts")
 }
 
+// Removing the last linked worktree deletes .git/worktrees; the status
+// refresh still updates the cached worktrees so the count badge goes away.
+func TestScmWorktreeCountAfterRemovingLastLinkedWorktree(t *testing.T) {
+	hs := newHarness(t, false)
+	git := hs.gitRepo()
+	git("branch", "one")
+	wt := filepath.Join(t.TempDir(), "wt")
+	git("worktree", "add", "-q", wt, "one")
+	hs.a.run("view.scm")
+	hs.settleGit()
+	a := hs.a
+	if n := len(a.git.worktrees); n != 2 {
+		t.Fatalf("%d worktrees, want 2", n)
+	}
+	if got, want := a.repository().scmCountsW(), float32(2*scmCountW); got != want {
+		t.Fatalf("the counts take %v, want %v", got, want)
+	}
+	git("worktree", "remove", wt)
+	hs.settleGit()
+	if n := len(a.git.worktrees); n != 1 {
+		t.Fatalf("%d worktrees after removal, want 1", n)
+	}
+	if got, want := a.repository().scmCountsW(), float32(scmCountW); got != want {
+		t.Fatalf("the counts take %v after removal, want %v", got, want)
+	}
+}
+
 // The commits' heading sums the lines every commit it lists changed, as
 // the headings of the changes sum theirs, and says so as commits come.
 func TestScmCountsTheLinesOfTheCommits(t *testing.T) {

@@ -327,6 +327,7 @@ func (a *gitContext) refreshGit() {
 		var remotesErr error
 		var config time.Time
 		var worktrees []git.Worktree
+		var worktreesErr error
 		var readWorktrees bool
 		worktreesOf0 := worktreesOf
 		readGit(func() {
@@ -354,11 +355,12 @@ func (a *gitContext) refreshGit() {
 				var tree time.Time
 				if info, err := os.Stat(filepath.Join(r.Common, "worktrees")); err == nil {
 					tree = info.ModTime()
-					worktreesOf = tree
-					readWorktrees = readWorktrees || !tree.Equal(worktreesOf0)
 				}
+				// Removing the last linked worktree deletes the folder itself.
+				worktreesOf = tree
+				readWorktrees = readWorktrees || !tree.Equal(worktreesOf0)
 				if readWorktrees {
-					worktrees, _ = r.Worktrees()
+					worktrees, worktreesErr = r.Worktrees()
 				}
 			}
 		})
@@ -376,7 +378,7 @@ func (a *gitContext) refreshGit() {
 			if stashesErr == nil {
 				g.stashes = stashes
 			}
-			if readWorktrees {
+			if readWorktrees && worktreesErr == nil {
 				g.worktrees, g.worktreesOf, g.worktreesAny = worktrees, worktreesOf, true
 			}
 			if readRemotes && remotesErr == nil {

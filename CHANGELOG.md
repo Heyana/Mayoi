@@ -15,6 +15,7 @@ needs a `## <version>` section here, or its build fails.
 - Markdown tabs reopen in the mode they were left in (`Source`, `Live Preview`, or `Reading`).
 - Source Control file rows and group headers show working-tree `+/−` line counts.
 - Branch and worktree buttons show counts when there is more than one, and worktrees show uncommitted counts.
+- Removing the last linked worktree clears the worktree count badge in Source Control.
 - Diffs render one size smaller than the editor while Source Control lists render one size larger.
 - Single-Markdown-file diffs include a **Reading** toggle button in the breadcrumbs.
 - Project rail rows show each project's logo or initials, branch ahead/behind counts, and changed file count.
