@@ -734,6 +734,11 @@ func (f *frame) railChanges(h *desktop) int {
 				return
 			}
 			h.changes, h.changesAt, h.changesBusy = n, time.Now(), false
+			// The rail draws only when something asks it to: ask again
+			// when the count is due, so the square keeps up with a work
+			// tree changed elsewhere.
+			// Not counted as background work: a test would wait it out.
+			time.AfterFunc(railChangesEvery, h.a.services.Invalidate)
 		})
 	})
 	return h.changes
