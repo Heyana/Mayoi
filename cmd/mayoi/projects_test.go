@@ -526,6 +526,42 @@ func TestRailReadsBeforeItFetches(t *testing.T) {
 	}
 }
 
+// A project whose tab was never switched to never drew a frame, so its own
+// app runs nothing posted to it. The window's app runs it instead: the row
+// shows without a switch to its tab.
+func TestRailCountsAProjectItNeverShowed(t *testing.T) {
+	hs := newHarness(t, true)
+	hs.gitRepo()
+	dir := filepath.Join(t.TempDir(), "lab")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=t@t", "-c", "user.name=t"}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q", "-b", "main")
+	writeLines(t, filepath.Join(dir, "README.md"), 3)
+	git("add", "README.md")
+	git("commit", "-q", "-m", "first")
+	writeLines(t, filepath.Join(dir, "README.md"), 9)
+
+	_, tabs, tt := railFixture(t, hs.root, dir)
+	deadline := time.Now().Add(5 * time.Second)
+	for tabs[1].changes != 1 && time.Now().Before(deadline) {
+		// The window draws, and the project's app is left to itself, as it
+		// is until its tab is chosen.
+		step(tt)
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := tabs[1].changes; got != 1 {
+		t.Fatalf("the project never shown counts %d changes, want 1", got)
+	}
+}
+
 func TestProjectWords(t *testing.T) {
 	for name, want := range map[string]string{
 		"mayoi": "M", "my-app": "MA", "mayoi_editor": "ME", "mayoiEditor": "ME", "go.dev": "GD", "": "?",
