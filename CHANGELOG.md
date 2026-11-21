@@ -5,7 +5,7 @@ needs a `## <version>` section here, or its build fails.
 
 ## Unreleased
 
-- The rail has four switches at its top, on the row of the sidebar's own and in its size: the order it keeps its projects in (what moved last or the order dragged), and how much of a row it shows (its name with the lines of its work and the time, or the name alone). Each lit while it is the state shown, and a click makes it that state, as a view of the sidebar is switched to. Both states are kept in the settings.
+- The rail has two switches at its top, on the row of the sidebar's own and in its size: the order it keeps its projects in, and whether a row shows the lines of its work and the time or its name alone. Each is lit while on, off for the other state, and a click turns it; both are kept in the settings.
 - Dragging a project to a place keeps that order, rather than being taken away by the next project that moves.
 
 - Each row of the project rail takes a second line under its name: the lines the work tree gained and lost (`+12 −3`), and when the project last moved (`刚刚`, `11:17`, `11-18`).
@@ -33,6 +33,7 @@ needs a `## <version>` section here, or its build fails.
 - The rail counts the files changed of every project as its window opens, and fetches alone: a remote that does not answer holds back neither the count nor the reads after it.
 - The rail shows the counts of a project whose tab has not been switched to yet, rather than only once it is.
 - `mayoi projects` lists the projects of the rail, adds folders to it, and removes them, so a script or an agent can register its own projects.
+- A button beside the title bar's opens a panel of recent commits: of each project of the rail, what it committed over the last day, week and month, with the lines those commits added and deleted, read from Git in the background and again every five minutes while the panel is open.
 - `mayoi projects list` says each project's label beside its folder, and `mayoi projects label` and `unlabel` name a project on the rail.
 - The Markdown Reading view shows an HTML `<table>` as a table, with its cells' alignment and pictures.
 - HTML `<ul>`, `<ol>` and `<li>` show as lists in the Reading view, nested and numbered.

@@ -72,6 +72,9 @@ type frame struct {
 	// railWidth is how wide the rail it drew is, for the names of its
 	// projects: the squares alone, or as wide as the longest name.
 	railWidth float32
+	// stats is the panel of recent commits of its projects, at the title
+	// bar's button.
+	stats statsState
 	// services are the window's, which the projects it does not show post
 	// to, once it has drawn.
 	services    ui.Services
@@ -92,6 +95,7 @@ type frame struct {
 // newFrame opens a window that shows h.
 func (m *mayoi) newFrame(h *desktop) *frame {
 	f := &frame{m: m}
+	f.stats.f = f
 	st := h.a.window
 	key := "main"
 	switch {
@@ -260,6 +264,7 @@ func (f *frame) view(c *ui.Context) {
 // add puts h at the end of the rail, without showing it.
 func (f *frame) add(h *desktop) {
 	h.f = f
+	h.a.stats, f.stats.f = &f.stats, f
 	f.tabs = append(f.tabs, h)
 	h.a.rail = func(c *ui.Context) { f.railView(c, h.a) }
 	if f.hasServices {
@@ -686,30 +691,39 @@ func (f *frame) railView(c *ui.Context, a *app) {
 
 // railTools are the rail's own controls, at its top, on the header's row
 // beside the sidebar's: the order it keeps its projects in, and how much
-// of a row it shows. Each is a switch, as the sidebar's views are: the one
-// its state is shows lit, and a click makes another the state, never a
-// turn of a switch.
+// of a row it shows. Each is one switch with a state either way, lit while
+// on, and a click turns it.
 func (f *frame) railTools(c *ui.Context, a *app) {
 	manual := f.m.s.RailOrder == "manual"
 	compact := f.m.s.RailRows == "compact"
-	// As the sidebar's own header: the height, the paddings and the gap
-	// between its switches.
-	ui.Row(c.Key("rail-tools")).MinHeight(34).Padding(0, 6, 0, 8).Gap(2).AlignItems(ui.Center).Wrap().Children(func() {
-		f.railSwitch(c, a, "rail-sort-activity", iconSort, !manual,
-			a.withKey(locales.RailSortActivity(), "rail.sortActivity"), func() { f.setRailOrder("") })
-		f.railSwitch(c, a, "rail-sort-manual", iconGrip, manual,
-			locales.RailSortManual(), func() { f.setRailOrder("manual") })
-		f.railSwitch(c, a, "rail-rows-full", iconRows, !compact,
-			locales.RailRowsFull(), func() { f.setRailRows("") })
-		f.railSwitch(c, a, "rail-rows-compact", iconList, compact,
-			locales.RailRowsCompact(), func() { f.setRailRows("compact") })
+	ui.Row(c.Key("rail-tools")).MinHeight(34).Padding(0, 6, 0, 8).Gap(2).AlignItems(ui.Center).Wrap().Margin(4, 0, 0, 0).Children(func() {
+		f.railSwitch(c, a, "rail-sort", iconSort, !manual,
+			locales.RailSortActivity(), locales.RailSortManual(), func() {
+				if manual {
+					f.setRailOrder("")
+					return
+				}
+				f.setRailOrder("manual")
+			})
+		f.railSwitch(c, a, "rail-rows", iconRows, !compact,
+			locales.RailRowsFull(), locales.RailRowsCompact(), func() {
+				if compact {
+					f.setRailRows("")
+					return
+				}
+				f.setRailRows("compact")
+			})
 	})
 }
 
-// railSwitch is one of the rail's states: lit while it is the one shown,
-// and a click makes it shown.
-func (f *frame) railSwitch(c *ui.Context, a *app, key string, icon *ui.SVG, on bool, label string, show func()) {
+// railSwitch is one of the rail's two switches: lit while on, named for
+// the state it holds, and a click turns it.
+func (f *frame) railSwitch(c *ui.Context, a *app, key string, icon *ui.SVG, on bool, onLabel, offLabel string, toggle func()) {
 	p := a.pal
+	label := offLabel
+	if on {
+		label = onLabel
+	}
 	b := ui.ButtonBase(c.Key(key)).Size(26, 24).Radius(5).Justify(ui.Center).AlignItems(ui.Center).Label(label).Tooltip(label)
 	col := p.muted
 	switch {
@@ -729,7 +743,7 @@ func (f *frame) railSwitch(c *ui.Context, a *app, key string, icon *ui.SVG, on b
 		ui.Icon(c, icon).FontSize(14).TextColor(col)
 	})
 	if b.Clicked() {
-		show()
+		toggle()
 	}
 }
 

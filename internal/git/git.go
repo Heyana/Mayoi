@@ -1205,6 +1205,48 @@ func (r *Repo) HeadTime() time.Time {
 	return time.Unix(sec, 0)
 }
 
+// Committed is one commit of the branch, and the lines it added and
+// deleted.
+type Committed struct {
+	When           time.Time
+	Added, Deleted int
+}
+
+// CommitsSince are the commits of the branch since when, newest first, with
+// the lines each added and deleted: a merge counts as a commit of no lines
+// of its own.
+func (r *Repo) CommitsSince(when time.Time) ([]Committed, error) {
+	out, err := r.run(nil, "log", "--since="+when.Format(time.RFC3339), "--format=COMMIT %ct", "--numstat")
+	if err != nil {
+		return nil, err
+	}
+	var stats []Committed
+	for _, line := range strings.Split(string(out), "\n") {
+		switch {
+		case strings.HasPrefix(line, "COMMIT "):
+			sec, err := strconv.ParseInt(strings.TrimSpace(line[len("COMMIT "):]), 10, 64)
+			if err != nil {
+				continue
+			}
+			stats = append(stats, Committed{When: time.Unix(sec, 0)})
+		case strings.Contains(line, "\t"):
+			if len(stats) == 0 {
+				continue
+			}
+			fields := strings.SplitN(line, "\t", 3)
+			if len(fields) < 2 || fields[0] == "-" || fields[1] == "-" {
+				continue
+			}
+			added, _ := strconv.Atoi(fields[0])
+			deleted, _ := strconv.Atoi(fields[1])
+			last := &stats[len(stats)-1]
+			last.Added += added
+			last.Deleted += deleted
+		}
+	}
+	return stats, nil
+}
+
 // Fetch fetches from the remotes.
 func (r *Repo) Fetch() error {
 	_, err := r.run(nil, "fetch", "--all", "--prune")

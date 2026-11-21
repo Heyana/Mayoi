@@ -196,6 +196,7 @@ func (a *app) view(c *ui.Context) {
 	a.promptView(c)
 	a.confirmView(c)
 	a.signinView(c)
+	a.statsView(c)
 	a.windowKeys(c)
 	if inEditor := a.keyFocus == placeEditor; inEditor != a.cutInEditor {
 		a.cutInEditor = inEditor
@@ -421,6 +422,7 @@ func (a *app) titleBar(c *ui.Context) {
 			if panelLeft {
 				terminalButton()
 			}
+			a.statsButton(c)
 			if !right {
 				sidebarButton()
 			}

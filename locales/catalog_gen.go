@@ -9404,6 +9404,76 @@ func (msgs Messages) RailSortActivity() string {
 	return Catalog.Format(msgs.locale, "railSortActivity", nil)
 }
 
+// StatsTitle says "Recent commits"
+// in the language the app shows.
+func StatsTitle() string { return In(i18n.Locale()).StatsTitle() }
+
+// StatsTitle says "Recent commits"
+// in the language of msgs.
+func (msgs Messages) StatsTitle() string {
+	return Catalog.Format(msgs.locale, "statsTitle", nil)
+}
+
+// StatsReading says "Reading…"
+// in the language the app shows.
+func StatsReading() string { return In(i18n.Locale()).StatsReading() }
+
+// StatsReading says "Reading…"
+// in the language of msgs.
+func (msgs Messages) StatsReading() string {
+	return Catalog.Format(msgs.locale, "statsReading", nil)
+}
+
+// StatsEmpty says "No commits yet"
+// in the language the app shows.
+func StatsEmpty() string { return In(i18n.Locale()).StatsEmpty() }
+
+// StatsEmpty says "No commits yet"
+// in the language of msgs.
+func (msgs Messages) StatsEmpty() string {
+	return Catalog.Format(msgs.locale, "statsEmpty", nil)
+}
+
+// Stats24h says "Last 24 hours"
+// in the language the app shows.
+func Stats24h() string { return In(i18n.Locale()).Stats24h() }
+
+// Stats24h says "Last 24 hours"
+// in the language of msgs.
+func (msgs Messages) Stats24h() string {
+	return Catalog.Format(msgs.locale, "stats24h", nil)
+}
+
+// Stats7d says "Last 7 days"
+// in the language the app shows.
+func Stats7d() string { return In(i18n.Locale()).Stats7d() }
+
+// Stats7d says "Last 7 days"
+// in the language of msgs.
+func (msgs Messages) Stats7d() string {
+	return Catalog.Format(msgs.locale, "stats7d", nil)
+}
+
+// Stats30d says "Last 30 days"
+// in the language the app shows.
+func Stats30d() string { return In(i18n.Locale()).Stats30d() }
+
+// Stats30d says "Last 30 days"
+// in the language of msgs.
+func (msgs Messages) Stats30d() string {
+	return Catalog.Format(msgs.locale, "stats30d", nil)
+}
+
+// StatsCommits says "%d commits"
+// in the language the app shows.
+func StatsCommits() string { return In(i18n.Locale()).StatsCommits() }
+
+// StatsCommits says "%d commits"
+// in the language of msgs.
+func (msgs Messages) StatsCommits() string {
+	return Catalog.Format(msgs.locale, "statsCommits", nil)
+}
+
 // RailSortManual says "The order you set · click to sort by what moved last"
 // in the language the app shows.
 func RailSortManual() string { return In(i18n.Locale()).RailSortManual() }

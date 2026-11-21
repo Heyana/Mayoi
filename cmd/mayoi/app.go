@@ -167,6 +167,9 @@ type app struct {
 	folderPrefs *folderPrefs
 	// window is what the settings keep of this window.
 	window *settings.Window
+	// stats is the panel of recent commits of the window's projects, nil
+	// in a window that shows one.
+	stats *statsState
 
 	pal *palette
 	// fade is the window's way from one palette to another, as the
