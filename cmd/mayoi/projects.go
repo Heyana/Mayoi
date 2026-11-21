@@ -694,7 +694,10 @@ func (f *frame) railTools(c *ui.Context, a *app) {
 	side := min((w-12-8)/2, float32(20))
 	// The icons start where the marks of the rows do, and the row of them
 	// sits as close under the first project as a project sits to another.
-	ui.Row(c.Key("rail-tools")).Width(w).Gap(8).Padding(0, 6, 0, 6).Children(func() {
+	ui.Row(c.Key("rail-tools")).Width(w).Gap(8).Children(func() {
+		// The icons line up with the marks of the rows: the same inset the
+		// row keeps before its own.
+		ui.Box(c).Width(4).Height(side).Shrink(0)
 		f.railTool(c, a, "rail-sort", iconSort, !manual, side,
 			locales.RailSortActivity(), locales.RailSortManual(), f.toggleRailOrder)
 		icon := iconRows
