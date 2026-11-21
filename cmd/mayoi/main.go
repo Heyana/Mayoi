@@ -55,6 +55,14 @@ type desktop struct {
 	// ahead and behind are the commits its branch has to push and to
 	// pull, read with the changes.
 	ahead, behind int
+	// added and deleted are the lines the work tree gained and lost, read
+	// of late for the row's second line: linesAt when last read.
+	added, deleted int
+	linesAt        time.Time
+	// activityAt is when the project last moved: the last commit of its
+	// branch, or the last change of a file of its work tree, whichever
+	// is later. The rail sorts its rows by it.
+	activityAt time.Time
 	// fetchedAt is when the project last fetched its upstream, which a
 	// stale read fetches before it counts how far the branch has fallen
 	// behind, and fetchBusy while that fetch runs.

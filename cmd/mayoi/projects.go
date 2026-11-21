@@ -609,21 +609,42 @@ func railFitShort(name string, width float32) string {
 	return "\u2026"
 }
 
+// railOrder is the projects in the order their rows show: the one that
+// moved last first.
+func railOrder(tabs []*desktop, now time.Time) []*desktop {
+	hs := slices.Clone(tabs)
+	slices.SortStableFunc(hs, func(x, y *desktop) int {
+		switch tx, ty := x.activityAt, y.activityAt; {
+		case tx.Equal(ty):
+			return 0
+		case ty.After(tx):
+			return 1
+		}
+		return -1
+	})
+	return hs
+}
+
 func (f *frame) railView(c *ui.Context, a *app) {
 	if !f.m.s.ProjectTabs {
 		return
 	}
 	p := a.pal
-	tabs := slices.Clone(f.tabs)
+	now := time.Now()
+	tabs := railOrder(f.tabs, now)
 	names := make([]string, len(tabs))
 	for i, h := range tabs {
 		names[i] = railTitle(f.m.s, h.a.folder())
 	}
-	var counts float32
+	var counts, subs float32
 	for _, h := range tabs {
 		counts = max(counts, railChipsWidth(railChips(h, p)))
+		// The second line, both its ends: the lines of the work and
+		// when the project last moved. It takes what it needs of its
+		// own, the names keep the room they had.
+		subs = max(subs, railLinesWidth(h, p)+12+labelShape(railWhen(h.activityAt, now), railSubSize).w)
 	}
-	width := railWidthFor(names, counts)
+	width := max(railWidthFor(names, counts), min(railPad+subs, railMaxW))
 	f.railWidth, a.railWidth = width, width
 	rail := ui.Column(c.Key("rail")).Width(width).Shrink(0).Background(railGround(p)).BorderWidth(0, 1, 0, 0).BorderColor(p.seam())
 	// Past the last square: at the end.
@@ -794,6 +815,24 @@ func hasRepository(dir string) bool {
 // every second for a square no one looks at.
 const railChangesEvery = 10 * time.Second
 
+// railRowH is a project's row: its name, and under it the lines of its
+// work and when it last moved.
+const railRowH float32 = 44
+
+// railSubSize is the size of the second line of a project's row, and
+// railSubGap the room between the lines it lists. railNameY and railSubY
+// are the middle of the two lines within the row.
+const (
+	railSubSize float32 = 9.5
+	railSubGap  float32 = 6
+	railNameY   float32 = 14
+	railSubY    float32 = 33
+)
+
+// railLinesEvery is how often the lines a work tree gained and lost are
+// read again: a diff of every change costs more than its status.
+const railLinesEvery = 30 * time.Second
+
 // railFetchEvery is how often a project fetches its upstream before the
 // counts are read: a branch falls behind commits made elsewhere, and Git
 // knows that only once it has heard of them. Half an hour is GitHub
@@ -846,6 +885,51 @@ func railChipsWidth(cs []railChip) float32 {
 	return w
 }
 
+// railLines are the lines a project's work tree gained and lost, as its
+// row lists them under its name; a binary change of no lines lists none.
+func railLines(h *desktop, p *palette) []railChip {
+	var cs []railChip
+	if h.added > 0 {
+		cs = append(cs, railChip{"+" + strconv.Itoa(h.added), p.added})
+	}
+	if h.deleted > 0 {
+		cs = append(cs, railChip{"\u2212" + strconv.Itoa(h.deleted), p.removed})
+	}
+	return cs
+}
+
+// railLinesWidth is the room the lines take at the left of a row's second
+// line.
+func railLinesWidth(h *desktop, p *palette) float32 {
+	var w float32
+	for i, c := range railLines(h, p) {
+		if i > 0 {
+			w += railSubGap
+		}
+		w += labelShape(c.text, railSubSize).w
+	}
+	return w
+}
+
+// railWhen is when a project last moved, as its row has room for it: the
+// minute, today's hour and minute, or the day.
+func railWhen(at, now time.Time) string {
+	if at.IsZero() {
+		return ""
+	}
+	switch d := now.Sub(at); {
+	case d < time.Minute:
+		return "刚刚"
+	case d < time.Hour:
+		return strconv.Itoa(int(d.Minutes())) + "m"
+	case now.Format("2006-01-02") == at.Format("2006-01-02"):
+		return at.Format("15:04")
+	case now.AddDate(0, 0, -1).Format("2006-01-02") == at.Format("2006-01-02"):
+		return "\u6628\u5929"
+	}
+	return at.Format("01-02")
+}
+
 // railChanges is how many files the project's work tree has changed, read
 // of late in the background: 0 for a project with none, a folder that is
 // no one's, or one not read yet.
@@ -865,6 +949,9 @@ func (f *frame) railChanges(h *desktop) int {
 	// Whether the branch is due a fetch is decided here, of the rail's
 	// own field, so the read below only sees a copy of it.
 	due := time.Since(h.fetchedAt) >= railFetchEvery
+	// The lines a work tree gained and lost cost a diff of every change,
+	// so they are read less often than the status.
+	dueLines := time.Since(h.linesAt) >= railLinesEvery || h.a.railOpAt.After(h.linesAt)
 	h.changesBusy, h.changesGen = true, h.changesGen+1
 	gen := h.changesGen
 	// A project left alone never draws, and its app runs the work posted
@@ -876,11 +963,34 @@ func (f *frame) railChanges(h *desktop) int {
 	}
 	bg.Go(func() {
 		var st *git.Status
+		var added, deleted int
+		var act, linesAt time.Time
 		r, err := git.Open(dir)
 		if err == nil {
 			// The branch's status says both what the work tree changed
 			// and how far its branch is from its upstream.
 			st, _ = r.Status()
+			// What the project last moved: its last commit, or a file of
+			// its work tree changed since, which says it was worked on.
+			act = r.HeadTime()
+			if st != nil {
+				for _, e := range st.Entries {
+					if info, err := os.Stat(e.Path); err == nil {
+						if mt := info.ModTime(); mt.After(act) {
+							act = mt
+						}
+					}
+				}
+			}
+			if dueLines {
+				linesAt = time.Now()
+				if num, err := r.WorkNumstat(); err == nil {
+					for _, f := range num {
+						added += f.Added
+						deleted += f.Deleted
+					}
+				}
+			}
 		}
 		post(func() {
 			if h.changesGen != gen {
@@ -889,6 +999,12 @@ func (f *frame) railChanges(h *desktop) int {
 			h.changesAt, h.changesBusy = time.Now(), false
 			if st != nil {
 				h.changes, h.ahead, h.behind = len(st.Entries), st.Ahead, st.Behind
+			}
+			if !act.IsZero() {
+				h.activityAt = act
+			}
+			if !linesAt.IsZero() {
+				h.added, h.deleted, h.linesAt = added, deleted, linesAt
 			}
 			// The fetch goes alone, and the row is drawn from what Git
 			// already knows: a fetch that waits on a slow remote must not
@@ -996,7 +1112,7 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 	}
 	// The row leaves the rail's inset at both edges: it is the rail's
 	// width less both.
-	b := ui.ButtonBase(c.Key(fmt.Sprintf("project-%d", h.a.window.ID))).Width(f.rail() - 2*railInset).Height(railSquare).Shrink(0).
+	b := ui.ButtonBase(c.Key(fmt.Sprintf("project-%d", h.a.window.ID))).Width(f.rail() - 2*railInset).Height(railRowH).Shrink(0).
 		Label(name).Description(railDescription(where, work)).Drag(railDrag{h})
 	f.railTip(c, a, b, name, where, keys, dirty, work, alert, h.a.alertState, alertCol, conn, connCol)
 	f.railDrop(b, a, h)
@@ -1061,8 +1177,8 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 			// Where the square dragged goes: before this one.
 			pt.Fill(ui.Rect{X: r.X + (r.W-24)/2, Y: r.Y - 4, W: 24, H: 2}, p.accent, 1)
 		}
-		s := float32(railSquare) - 2*sink
-		sq := ui.Rect{X: r.X, Y: r.Y + (r.H-s)/2, W: max(r.W, s), H: s}
+		sh := max(float32(railSquare), r.H-4) - 2*sink
+		sq := ui.Rect{X: r.X, Y: r.Y + (r.H-sh)/2, W: max(r.W, sh), H: sh}
 		alpha := float32(1)
 		if dragged {
 			alpha = 0.4
@@ -1102,7 +1218,22 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 		}
 		l := labelShape(label, railNameSize-1)
 		at := chip.X + chip.W + 7
-		pt.Glyphs(l.glyphs, at, sq.Y+sq.H/2+l.mid, ink.Alpha(alpha))
+		// Two lines: the name above, and under it the lines of its work
+		// and when it last moved.
+		pt.Glyphs(l.glyphs, at, r.Y+railNameY+l.mid, ink.Alpha(alpha))
+		x := at
+		for i, c := range railLines(h, p) {
+			if i > 0 {
+				x += railSubGap
+			}
+			sl := labelShape(c.text, railSubSize)
+			pt.Glyphs(sl.glyphs, x, r.Y+railSubY+sl.mid, c.col.Alpha(alpha))
+			x += sl.w
+		}
+		if when := railWhen(h.activityAt, pt.Now()); when != "" {
+			sl := labelShape(when, railSubSize)
+			pt.Glyphs(sl.glyphs, sq.X+sq.W-8-sl.w, r.Y+railSubY+sl.mid, p.muted.Alpha(alpha))
+		}
 		if conn != "" {
 			// At the corner the dots leave, cut out as they are, the
 			// glyph of a server in the rail's ground.
@@ -1145,7 +1276,7 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 			x := sq.X + sq.W - 8 - railChipsWidth(cs)
 			for _, c := range cs {
 				l := labelShape(c.text, railChipSize)
-				pt.Glyphs(l.glyphs, x, sq.Y+sq.H/2+l.mid, c.col.Alpha(alpha))
+				pt.Glyphs(l.glyphs, x, r.Y+railNameY+l.mid, c.col.Alpha(alpha))
 				x += l.w + 8
 			}
 		}

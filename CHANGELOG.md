@@ -5,6 +5,9 @@ needs a `## <version>` section here, or its build fails.
 
 ## Unreleased
 
+- Each row of the project rail takes a second line under its name: the lines the work tree gained and lost (`+12 −3`), and when the project last moved (`刚刚`, `11:17`, `11-18`).
+- The rail sorts its projects by when they last moved, the one worked on last first: a commit of its branch, or a file of its work tree changed.
+
 - A commit chosen in Source Control shows how many lines it gained and lost.
 - Commits chosen together show the files they changed in one diff, each with its +/−.
 - The panel of a commit's files shows each file's +/− beside its letter.

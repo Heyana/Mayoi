@@ -1191,6 +1191,20 @@ func parseNumstat(out string) CommitStat {
 	return st
 }
 
+// HeadTime is when the branch last committed, the zero time for a
+// repository with no commit yet.
+func (r *Repo) HeadTime() time.Time {
+	out, err := r.run(nil, "log", "-1", "--format=%ct")
+	if err != nil {
+		return time.Time{}
+	}
+	sec, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+	if err != nil {
+		return time.Time{}
+	}
+	return time.Unix(sec, 0)
+}
+
 // Fetch fetches from the remotes.
 func (r *Repo) Fetch() error {
 	_, err := r.run(nil, "fetch", "--all", "--prune")

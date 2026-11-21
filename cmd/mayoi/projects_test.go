@@ -294,8 +294,11 @@ func TestRailNamesItsProjects(t *testing.T) {
 			t.Fatalf("no square named %q: %v", filepath.Base(dir), tt.Texts())
 		}
 	}
-	if want := railWidthFor([]string{"mayoi", "code-lab"}, 0); f.rail() != want {
-		t.Errorf("the rail is %v wide, want %v", f.rail(), want)
+	// Its rows take two lines, the second of them wider than a short
+	// name: the rail is at least the room of the names, and no wider than
+	// its most.
+	if want := railWidthFor([]string{"mayoi", "code-lab"}, 0); f.rail() < want || f.rail() > railMaxW {
+		t.Errorf("the rail is %v wide, want %v to %v", f.rail(), want, float32(railMaxW))
 	}
 	// A name longer than the rail's most is cut to it, its end in an
 	// ellipsis, and the rail holds at railMaxW.
@@ -394,6 +397,37 @@ func TestRailLooksLikeItself(t *testing.T) {
 	_ = f
 	if dir := os.Getenv("SHOTS"); dir != "" {
 		out, err := os.Create(filepath.Join(dir, "rail-look.png"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer out.Close()
+		png.Encode(out, tt.Image())
+	}
+}
+
+// A row's second line says the lines its work gained and lost, on the left,
+// and when the project last moved, on the right.
+func TestRailRowShowsItsWork(t *testing.T) {
+	root := t.TempDir()
+	var dirs []string
+	for _, name := range []string{"vmk-1.0", "code-lab", "nsgo"} {
+		dir := filepath.Join(root, name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		dirs = append(dirs, dir)
+	}
+	_, tabs, tt := railFixture(t, dirs...)
+	now := time.Now()
+	tabs[0].added, tabs[0].deleted, tabs[0].changes = 128, 21, 5
+	tabs[0].ahead, tabs[0].behind = 2, 1
+	tabs[0].activityAt = now
+	tabs[1].added, tabs[1].changes = 1200, 1
+	tabs[1].activityAt = now.Add(-90 * time.Minute)
+	tabs[2].activityAt = now.AddDate(0, 0, -3)
+	step(tt)
+	if dir := os.Getenv("SHOTS"); dir != "" {
+		out, err := os.Create(filepath.Join(dir, "rail-row.png"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -529,6 +563,69 @@ func TestRailReadsBeforeItFetches(t *testing.T) {
 // A project whose tab was never switched to never drew a frame, so its own
 // app runs nothing posted to it. The window's app runs it instead: the row
 // shows without a switch to its tab.
+// A project's row names the lines its work tree gained and lost, under the
+// name, without its tab ever being shown.
+func TestRailShowsTheLinesItsWorkAddedAndDeleted(t *testing.T) {
+	hs := newHarness(t, true)
+	hs.gitRepo()
+	dir := filepath.Join(t.TempDir(), "lab")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=t@t", "-c", "user.name=t"}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q", "-b", "main")
+	writeLines(t, filepath.Join(dir, "README.md"), 3)
+	git("add", "README.md")
+	git("commit", "-q", "-m", "first")
+	// Six lines added, three gone.
+	writeLines(t, filepath.Join(dir, "README.md"), 9)
+
+	_, tabs, tt := railFixture(t, hs.root, dir)
+	deadline := time.Now().Add(5 * time.Second)
+	for tabs[1].added != 6 && time.Now().Before(deadline) {
+		step(tt)
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := tabs[1].added; got != 6 {
+		t.Fatalf("the row counts %d lines added, want 6", got)
+	}
+	if cs := railLines(tabs[1], &palette{}); len(cs) == 0 || cs[0].text != "+6" {
+		t.Fatalf("the row lists %v, want +6", cs)
+	}
+	// When the project last moved: a change of its work tree is now.
+	if since := time.Since(tabs[1].activityAt); since > time.Minute || since < 0 {
+		t.Fatalf("the project moved %v ago, want just now", since)
+	}
+}
+
+// The rail shows the project that moved last first, and one that never
+// moved after them all.
+func TestRailOrdersItsProjectsByActivity(t *testing.T) {
+	now := time.Now()
+	old, moved, never := &desktop{}, &desktop{}, &desktop{}
+	moved.activityAt = now
+	old.activityAt = now.Add(-time.Hour)
+	for _, c := range []struct {
+		name string
+		tabs []*desktop
+		want *desktop
+	}{
+		{"the one that moved last", []*desktop{old, moved}, moved},
+		{"one that never moved", []*desktop{never, moved}, moved},
+		{"one that never moved last", []*desktop{never, old}, old},
+	} {
+		if got := railOrder(c.tabs, now); got[0] != c.want {
+			t.Errorf("%s is first, want %v", c.name, c.want)
+		}
+	}
+}
+
 func TestRailCountsAProjectItNeverShowed(t *testing.T) {
 	hs := newHarness(t, true)
 	hs.gitRepo()
