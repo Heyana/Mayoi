@@ -30,6 +30,7 @@ import (
 	xdraw "golang.org/x/image/draw"
 
 	"mayoi/internal/bg"
+	"mayoi/internal/git"
 	"mayoi/internal/remote"
 	"mayoi/internal/settings"
 	"mayoi/internal/vfs"
@@ -700,6 +701,44 @@ func railName(dir string) (name, where string) {
 // finished or failed while the project was out of sight, in the color of
 // its state, and, while a program works, a ring turning around it. label is what it shows without a logo,
 // unless the project has a label of its own.
+// railChangesEvery is how often the square's count of changed files is
+// read again: often enough that a project switched to shows its own.
+const railChangesEvery = 3 * time.Second
+
+// railChangesSize is the size of the count on the square.
+const railChangesSize float32 = 10
+
+// railChanges is how many files the project's work tree has changed, read
+// of late in the background: 0 for a project with none, a folder that is
+// no one's, or one not read yet.
+func (f *frame) railChanges(h *desktop) int {
+	dir := h.a.folder()
+	if dir == "" || h.a.conn != nil {
+		// A remote folder is not read from here.
+		return 0
+	}
+	if h.changesBusy || time.Since(h.changesAt) < railChangesEvery {
+		return h.changes
+	}
+	h.changesBusy, h.changesGen = true, h.changesGen+1
+	gen := h.changesGen
+	bg.Go(func() {
+		n := 0
+		if r, err := git.Open(dir); err == nil {
+			if got, err := r.Changed(); err == nil {
+				n = got
+			}
+		}
+		h.a.post(func() {
+			if h.changesGen != gen {
+				return
+			}
+			h.changes, h.changesAt, h.changesBusy = n, time.Now(), false
+		})
+	})
+	return h.changes
+}
+
 func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) {
 	p := a.pal
 	dir := h.a.folder()
@@ -761,6 +800,7 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 	if !calm && len(work.blocked) > 0 && time.Since(work.blockedSince) < pulseFor {
 		pulse = work.blockedSince
 	}
+	changes := f.railChanges(h)
 	col := avatarColor(p, dir)
 	if k, ok := railColor(p, style.Color); ok {
 		col = k
@@ -905,6 +945,20 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 			d := ui.Rect{X: sq.X + sq.W - 7, Y: sq.Y - 3, W: 10, H: 10}
 			pt.Fill(ui.Rect{X: d.X - 2, Y: d.Y - 2, W: d.W + 4, H: d.H + 4}, ground, 7)
 			pt.Fill(d, p.text.Alpha(0.85), 5)
+		}
+		if n := changes; n > 0 {
+			// At the corner across from the dot of a program that waits,
+			// what the project's source control would say: the files it
+			// has changed, for a project not shown as for one shown.
+			what := strconv.Itoa(n)
+			if n > 99 {
+				what = "99+"
+			}
+			l := labelShape(what, railChangesSize)
+			badge := ui.Rect{X: sq.X, Y: sq.Y + sq.H - 11, W: l.w + 8, H: 15}
+			pt.Fill(ui.Rect{X: badge.X - 1, Y: badge.Y - 1, W: badge.W + 2, H: badge.H + 2}, ground, badge.H/2+1)
+			pt.Fill(badge, p.fill.Alpha(alpha), badge.H/2)
+			paintLabel(pt, badge, what, railChangesSize, p.fillText.Alpha(alpha))
 		}
 	})
 	b.ContextMenu(func(mn *ui.Menu) {

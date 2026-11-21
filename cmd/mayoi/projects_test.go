@@ -238,6 +238,43 @@ func writeLines(t *testing.T, path string, n int) {
 	}
 }
 
+// The square of a project not shown counts the files its work tree has
+// changed, read in the background: what switching to it would show.
+func TestRailSquareCountsTheChangesOfAnotherProject(t *testing.T) {
+	hs := newHarness(t, true)
+	hs.gitRepo()
+	f, tabs, tt := railFixture(t, hs.root, workspaceFixture(t))
+	writeLines(t, hs.path("main.go"), 40)
+	writeLines(t, hs.path("README.md"), 9)
+	deadline := time.Now().Add(3 * time.Second)
+	for tabs[0].changes != 2 && time.Now().Before(deadline) {
+		step(tt)
+		tabs[0].a.drain()
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := tabs[0].changes; got != 2 {
+		t.Fatalf("the other project counts %d changes, want 2", got)
+	}
+	// The square shown reads its own count too, and the folder that is
+	// not a repository has none.
+	step(tt)
+	tabs[1].a.drain()
+	if got := tabs[1].changes; got != 0 {
+		t.Errorf("a folder that is not a repository counts %d changes", got)
+	}
+	if f.active != tabs[0] {
+		t.Errorf("the window shows %q, not %q", f.active.a.folder(), tabs[0].a.folder())
+	}
+	if dir := os.Getenv("SHOTS"); dir != "" {
+		out, err := os.Create(filepath.Join(dir, "rail-changes.png"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer out.Close()
+		png.Encode(out, tt.Image())
+	}
+}
+
 func TestProjectWords(t *testing.T) {
 	for name, want := range map[string]string{
 		"mayoi": "M", "my-app": "MA", "mayoi_editor": "ME", "mayoiEditor": "ME", "go.dev": "GD", "": "?",

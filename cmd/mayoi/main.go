@@ -44,6 +44,14 @@ type desktop struct {
 	logoDone      bool
 	logoScannedAt time.Time
 	logoGen       int
+	// changes is how many files the project's work tree has changed, read
+	// of late for the rail's square: changesAt when last read, changesBusy
+	// while a read runs, and changesGen drops the reads a newer one
+	// superseded.
+	changes     int
+	changesAt   time.Time
+	changesBusy bool
+	changesGen  int
 }
 
 // lifecycle is how far the app, or a window, is along closing: open,
