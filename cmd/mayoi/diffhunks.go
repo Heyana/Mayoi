@@ -44,7 +44,7 @@ type hunkArrow struct {
 // the versions Git keeps are read only. A file one side of the diff lacks
 // whole has no arrows, since its changes go in or out with the file itself.
 func hunkArrows(f *diffFile) []hunkArrow {
-	if !f.loaded || f.binary || !f.old.ok || !f.new.ok || f.entry.Submodule() {
+	if f.readOnly || !f.loaded || f.binary || !f.old.ok || !f.new.ok || f.entry.Submodule() {
 		return nil
 	}
 	if f.base == diffLocal {
@@ -78,7 +78,7 @@ func localFileWritable(path string) bool {
 // diff, one change at a time: those of a file in both versions only, as
 // a file added or removed goes in or out whole, as a submodule does.
 func hunkActions(f *diffFile) []hunkAction {
-	if !f.loaded || f.binary || !f.old.ok || !f.new.ok || f.entry.Submodule() {
+	if f.readOnly || !f.loaded || f.binary || !f.old.ok || !f.new.ok || f.entry.Submodule() {
 		return nil
 	}
 	switch {

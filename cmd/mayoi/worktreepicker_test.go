@@ -79,9 +79,11 @@ func TestSourceControlWorktreeBox(t *testing.T) {
 func TestWorktreeBoxSwitchesToLinked(t *testing.T) {
 	hs, run, side := worktreeFixture(t)
 	openWorktrees(t, hs)
-	if err := hs.tt.Click("side"); err != nil {
-		t.Fatal(err)
-	}
+	// The section behind the box names it too: choose the box's row by
+	// typing it, rather than the first text the frame holds.
+	hs.tt.Type("side")
+	hs.settle()
+	hs.tt.Key(0, ui.KeyEnter)
 	hs.settle()
 	want, err := filepath.EvalSymlinks(side)
 	if err != nil {
@@ -122,9 +124,9 @@ func TestWorktreeBoxMissingFolderIsReported(t *testing.T) {
 	}
 	root, fails := a.root, a.fails
 	openWorktrees(t, hs)
-	if err := hs.tt.Click("gone"); err != nil {
-		t.Fatal(err)
-	}
+	hs.tt.Type("gone")
+	hs.settle()
+	hs.tt.Key(0, ui.KeyEnter)
 	hs.settle()
 	// The failure is shown as a message, which the frames clear: it counts.
 	if a.root != root || a.fails != fails+1 {

@@ -27,9 +27,10 @@ type diffEdit struct {
 
 // writable reports whether the new side of a file of a diff is the work
 // tree's, which a diff edits: the changes staged or committed compare
-// versions Git keeps, which are not for editing here.
+// versions Git keeps, which are not for editing here, and a file of a
+// worktree beside the window's is read here rather than written.
 func (f *diffFile) writable() bool {
-	return f.loaded && f.err == "" && !f.binary && f.new.ok && !f.entry.Submodule() &&
+	return f.loaded && f.err == "" && !f.binary && !f.readOnly && f.new.ok && !f.entry.Submodule() &&
 		(f.base == diffIndex || f.base == diffHead)
 }
 

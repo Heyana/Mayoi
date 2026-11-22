@@ -4438,6 +4438,16 @@ func (msgs Messages) DiffChangesName() string {
 	return Catalog.Format(msgs.locale, "diffChangesName", nil)
 }
 
+// DiffChangesOfWorktree says "Changes · {name}"
+// in the language the app shows.
+func DiffChangesOfWorktree(name string) string { return In(i18n.Locale()).DiffChangesOfWorktree(name) }
+
+// DiffChangesOfWorktree says "Changes · {name}"
+// in the language of msgs.
+func (msgs Messages) DiffChangesOfWorktree(name string) string {
+	return Catalog.Format(msgs.locale, "diffChangesOfWorktree", map[string]any{"name": name})
+}
+
 // DiffChooseDifferent says "Choose two different files to compare."
 // in the language the app shows.
 func DiffChooseDifferent() string { return In(i18n.Locale()).DiffChooseDifferent() }
@@ -11466,6 +11476,126 @@ func ScmWritingHint() string { return In(i18n.Locale()).ScmWritingHint() }
 // in the language of msgs.
 func (msgs Messages) ScmWritingHint() string {
 	return Catalog.Format(msgs.locale, "scmWritingHint", nil)
+}
+
+// ScmWorktreeCurrent says "current"
+// in the language the app shows.
+func ScmWorktreeCurrent() string { return In(i18n.Locale()).ScmWorktreeCurrent() }
+
+// ScmWorktreeCurrent says "current"
+// in the language of msgs.
+func (msgs Messages) ScmWorktreeCurrent() string {
+	return Catalog.Format(msgs.locale, "scmWorktreeCurrent", nil)
+}
+
+// ScmWorktreeFailed says "Unable to read this worktree's changes — Retry"
+// in the language the app shows.
+func ScmWorktreeFailed() string { return In(i18n.Locale()).ScmWorktreeFailed() }
+
+// ScmWorktreeFailed says "Unable to read this worktree's changes — Retry"
+// in the language of msgs.
+func (msgs Messages) ScmWorktreeFailed() string {
+	return Catalog.Format(msgs.locale, "scmWorktreeFailed", nil)
+}
+
+// ScmWorktreeFiles says "{count, plural, one {# file changed} other {# files changed}}"
+// in the language the app shows.
+func ScmWorktreeFiles(count int) string { return In(i18n.Locale()).ScmWorktreeFiles(count) }
+
+// ScmWorktreeFiles says "{count, plural, one {# file changed} other {# files changed}}"
+// in the language of msgs.
+func (msgs Messages) ScmWorktreeFiles(count int) string {
+	return Catalog.Format(msgs.locale, "scmWorktreeFiles", map[string]any{"count": count})
+}
+
+// ScmWorktreeOpen says "Open Worktree"
+// in the language the app shows.
+func ScmWorktreeOpen() string { return In(i18n.Locale()).ScmWorktreeOpen() }
+
+// ScmWorktreeOpen says "Open Worktree"
+// in the language of msgs.
+func (msgs Messages) ScmWorktreeOpen() string {
+	return Catalog.Format(msgs.locale, "scmWorktreeOpen", nil)
+}
+
+// ScmWorktreePrune says "Prune Worktree…"
+// in the language the app shows.
+func ScmWorktreePrune() string { return In(i18n.Locale()).ScmWorktreePrune() }
+
+// ScmWorktreePrune says "Prune Worktree…"
+// in the language of msgs.
+func (msgs Messages) ScmWorktreePrune() string {
+	return Catalog.Format(msgs.locale, "scmWorktreePrune", nil)
+}
+
+// ScmWorktreeShowChanges says "Show Changes"
+// in the language the app shows.
+func ScmWorktreeShowChanges() string { return In(i18n.Locale()).ScmWorktreeShowChanges() }
+
+// ScmWorktreeShowChanges says "Show Changes"
+// in the language of msgs.
+func (msgs Messages) ScmWorktreeShowChanges() string {
+	return Catalog.Format(msgs.locale, "scmWorktreeShowChanges", nil)
+}
+
+// ScmWorktreeStaged says "Staged"
+// in the language the app shows.
+func ScmWorktreeStaged() string { return In(i18n.Locale()).ScmWorktreeStaged() }
+
+// ScmWorktreeStaged says "Staged"
+// in the language of msgs.
+func (msgs Messages) ScmWorktreeStaged() string {
+	return Catalog.Format(msgs.locale, "scmWorktreeStaged", nil)
+}
+
+// ScmWorktrees says "All Worktree Changes"
+// in the language the app shows.
+func ScmWorktrees() string { return In(i18n.Locale()).ScmWorktrees() }
+
+// ScmWorktrees says "All Worktree Changes"
+// in the language of msgs.
+func (msgs Messages) ScmWorktrees() string {
+	return Catalog.Format(msgs.locale, "scmWorktrees", nil)
+}
+
+// ScmWorktreesClean says "All worktrees are clean"
+// in the language the app shows.
+func ScmWorktreesClean() string { return In(i18n.Locale()).ScmWorktreesClean() }
+
+// ScmWorktreesClean says "All worktrees are clean"
+// in the language of msgs.
+func (msgs Messages) ScmWorktreesClean() string {
+	return Catalog.Format(msgs.locale, "scmWorktreesClean", nil)
+}
+
+// ScmWorktreesFailed says "Unable to read the worktrees — Retry"
+// in the language the app shows.
+func ScmWorktreesFailed() string { return In(i18n.Locale()).ScmWorktreesFailed() }
+
+// ScmWorktreesFailed says "Unable to read the worktrees — Retry"
+// in the language of msgs.
+func (msgs Messages) ScmWorktreesFailed() string {
+	return Catalog.Format(msgs.locale, "scmWorktreesFailed", nil)
+}
+
+// ScmWorktreesNone says "No other worktrees"
+// in the language the app shows.
+func ScmWorktreesNone() string { return In(i18n.Locale()).ScmWorktreesNone() }
+
+// ScmWorktreesNone says "No other worktrees"
+// in the language of msgs.
+func (msgs Messages) ScmWorktreesNone() string {
+	return Catalog.Format(msgs.locale, "scmWorktreesNone", nil)
+}
+
+// ScmWorktreesRemote says "Changes of other worktrees are not read over a connection."
+// in the language the app shows.
+func ScmWorktreesRemote() string { return In(i18n.Locale()).ScmWorktreesRemote() }
+
+// ScmWorktreesRemote says "Changes of other worktrees are not read over a connection."
+// in the language of msgs.
+func (msgs Messages) ScmWorktreesRemote() string {
+	return Catalog.Format(msgs.locale, "scmWorktreesRemote", nil)
 }
 
 // SearchClearResults says "Clear Search Results"

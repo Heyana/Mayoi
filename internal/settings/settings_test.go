@@ -471,14 +471,14 @@ func TestTerminalBackendHcPreferences(t *testing.T) {
 func TestScmRepositoryPreferencesRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	s := Load(path)
-	if s.ScmRepositoryOpen {
-		t.Fatal("repository panel must default collapsed")
+	if s.ScmRepositoryOpen || !s.ScmWorktreesOpen {
+		t.Fatal("the repository panel must default collapsed, and the worktree changes open")
 	}
-	s.ScmRepositoryOpen, s.ScmRemotes = true, true
+	s.ScmRepositoryOpen, s.ScmRemotes, s.ScmWorktreesOpen = true, true, false
 	s.Changed()
 	s.Flush()
 	got := Load(path)
-	if !got.ScmRepositoryOpen || !got.ScmRemotes {
+	if !got.ScmRepositoryOpen || !got.ScmRemotes || got.ScmWorktreesOpen {
 		t.Fatal("repository panel preferences were not saved")
 	}
 }

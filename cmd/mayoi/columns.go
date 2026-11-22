@@ -768,6 +768,7 @@ func (a *app) splitRight() {
 			}
 		}
 		v.repoRoot = t.diff.repoRoot
+		v.worktree = t.diff.worktree
 		// The offsets only: the scroll's handle binds one view's control,
 		// and MyGo panics on a handle bound in two columns.
 		v.scroll.X, v.scroll.Y = t.diff.scroll.X, t.diff.scroll.Y
@@ -1202,7 +1203,7 @@ func (a *app) restoreTabs() {
 						layout = layoutSplit
 					}
 					v := newDiffView(layout)
-					v.repoRoot = ts.RepoRoot
+					v.repoRoot, v.worktree = ts.RepoRoot, a.diffWorktreeName(ts.RepoRoot)
 					a.addTab(col, len(col.tabs), &colTab{diff: v})
 					a.activate(col, len(col.tabs)-1, false)
 				}

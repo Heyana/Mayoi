@@ -275,6 +275,38 @@ var galleryStates = []struct {
 		hs.settle()
 		hs.insert("// more\n")
 	}},
+	{"worktrees", func(hs *harness) {
+		run := hs.gitRepo()
+		side := filepath.Join(hs.t.TempDir(), "side")
+		run("worktree", "add", "-b", "side", side)
+		os.WriteFile(filepath.Join(side, "side.go"), []byte("package side\n"), 0o644)
+		os.WriteFile(hs.path("main.go"), []byte("package main\n"), 0o644)
+		hs.a.settings.ScmRepositoryOpen, hs.a.settings.ScmWorktreesOpen = true, true
+		hs.a.run("view.scm")
+		hs.settleGit()
+		hs.settle()
+	}},
+	{"worktrees-loading", func(hs *harness) {
+		hs.gitRepo()
+		hs.a.settings.ScmWorktreesOpen = true
+		hs.a.run("view.scm")
+		hs.settleGit()
+		hs.settle()
+		// Before Git lists them.
+		w := &hs.a.rootRepository().scm.worktrees
+		w.loaded, w.loading, w.trees = false, true, nil
+		w.gen++
+	}},
+	{"worktrees-missing", func(hs *harness) {
+		run := hs.gitRepo()
+		gone := filepath.Join(hs.t.TempDir(), "gone")
+		run("worktree", "add", "-b", "gone", gone)
+		os.RemoveAll(gone)
+		hs.a.settings.ScmWorktreesOpen = true
+		hs.a.run("view.scm")
+		hs.settleGit()
+		hs.settle()
+	}},
 	{"stats", func(hs *harness) {
 		if hs.a.stats == nil {
 			hs.a.stats = &statsState{}

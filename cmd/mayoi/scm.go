@@ -66,6 +66,9 @@ type scmRow struct {
 	name  string
 	depth int
 	panel *scmPanelRow
+	// wt is the row of the section listing every worktree's changes: its
+	// header, a worktree, a file of one, or a note.
+	wt *scmWorktreeRow
 	// under is the commit of the history a row of its files is under, at
 	// at in it: a folder's, a file's, or one with a note, while its files
 	// are read or when they could not be.
@@ -75,7 +78,7 @@ type scmRow struct {
 
 // file reports whether a row is a file's.
 func (r *scmRow) file() bool {
-	return r.panel == nil && !r.header && r.commit == nil && !r.more && r.dir == "" && r.under == nil
+	return r.panel == nil && r.wt == nil && !r.header && r.commit == nil && !r.more && r.dir == "" && r.under == nil
 }
 
 // choice is the list of rows a row is chosen with: the files, the commits
@@ -115,6 +118,12 @@ type scmState struct {
 	rowsTree      bool
 	panels        scmPanels
 	rowsPanels    int
+	// worktrees is the section listing every worktree's changes, and
+	// rowsWorktrees the generation of it the rows were made for, with
+	// rowsWorktreesOpen the setting they were made for.
+	worktrees         scmWorktrees
+	rowsWorktrees     int
+	rowsWorktreesOpen bool
 	// openCommits are the commits of the history whose files show under
 	// them, by hash, and commitFiles what was read of each; commitsGen
 	// counts their changes, and rowsCommits is what the rows were made
@@ -193,7 +202,8 @@ func (a *gitContext) scmRows() []scmRow {
 	tree := a.app.settings.ScmTree
 	if s.rows != nil && s.rowsOf == g.status && s.rowsCollapsed == s.collapsed && s.rowsHistory == g.historyGen &&
 		s.rowsDirs == s.dirsGen && s.rowsTree == tree && s.rowsPanels == s.panels.gen && s.rowsSection == s.section &&
-		s.rowsCommits == s.commitsGen {
+		s.rowsCommits == s.commitsGen && s.rowsWorktrees == s.worktrees.gen &&
+		s.rowsWorktreesOpen == a.app.settings.ScmWorktreesOpen {
 		return s.rows
 	}
 	var rows []scmRow
@@ -233,9 +243,11 @@ func (a *gitContext) scmRows() []scmRow {
 	}
 	if s.section != scmChanges {
 		rows = a.scmPanelRows(rows)
+		rows = a.scmWorktreeRows(rows)
 	}
 	s.rowsSection = s.section
 	s.rowsPanels = s.panels.gen
+	s.rowsWorktrees, s.rowsWorktreesOpen = s.worktrees.gen, a.app.settings.ScmWorktreesOpen
 	s.rows, s.rowsOf, s.rowsCollapsed, s.rowsHistory = rows, g.status, s.collapsed, g.historyGen
 	s.rowsDirs, s.rowsTree, s.rowsCommits = s.dirsGen, tree, s.commitsGen
 	s.rowsGen++
@@ -503,6 +515,8 @@ func (a *gitContext) scmList(c *ui.Context) {
 	p, g := a.app.pal, a.git
 	if a.scm.section != scmChanges {
 		a.refreshScmPanels()
+		a.refreshScmWorktrees()
+		a.autoRefreshScmWorktrees()
 	}
 	rows := a.scmRows()
 	s := a.scm
@@ -526,6 +540,8 @@ func (a *gitContext) scmList(c *ui.Context) {
 	}
 	s.list.Label = func(i int) string {
 		switch r := rows[i]; {
+		case r.wt != nil:
+			return r.wt.label
 		case r.panel != nil:
 			return r.panel.label
 		case r.header:
@@ -553,6 +569,8 @@ func (a *gitContext) scmList(c *ui.Context) {
 	buildList := func() {
 		out = ui.List(c.Key("scm"), &s.list, len(rows), func(i int) {
 			switch r := rows[i]; {
+			case r.wt != nil:
+				a.scmWorktreeRowView(c, r, &action)
 			case r.panel != nil:
 				a.scmPanelRowView(c, r, &action)
 			case r.header:
@@ -658,6 +676,8 @@ func (a *gitContext) scmListInput(out ui.Element, rows []scmRow, reveal func(int
 	}
 	if s.row >= 0 && s.row < len(rows) && out.Submitted() {
 		switch r := rows[s.row]; {
+		case r.wt != nil:
+			a.activateScmWorktreeRow(r)
 		case r.panel != nil:
 			a.activateScmPanelRow(r)
 		case r.under != nil && r.dir == "" && r.note == "":
@@ -679,6 +699,19 @@ func (a *gitContext) scmListInput(out ui.Element, rows []scmRow, reveal func(int
 		r := rows[s.row]
 		right, left := out.Shortcut(0, ui.KeyRight), out.Shortcut(0, ui.KeyLeft)
 		switch {
+		case r.wt != nil && r.wt.kind == "tree":
+			if right && a.scm.worktrees.closed[r.key] || left && !a.scm.worktrees.closed[r.key] {
+				a.activateScmWorktreeRow(r)
+			}
+		case r.wt != nil && r.wt.kind == "file" && left:
+			// Left goes back up to the worktree of the file.
+			for k := s.row - 1; k >= 0; k-- {
+				if p := rows[k].wt; p != nil && p.kind == "tree" && p.tree != nil && p.tree == r.wt.tree {
+					s.row = k
+					s.list.ScrollIntoView(k)
+					break
+				}
+			}
 		case r.commit != nil && r.at >= 0:
 			if right && !s.openCommits[r.commit.Hash] || left && s.openCommits[r.commit.Hash] {
 				a.toggleCommitOpen(*r.commit)
@@ -1999,7 +2032,7 @@ func entryPaths(e git.Entry, staged bool) []string {
 // diff scrolls to it.
 func (a *gitContext) chooseScmFile(f *diffFile) {
 	for i, r := range a.scm.rows {
-		if !r.header && r.e.Path == f.path && (r.group == groupStaged) == (f.base == diffStaged) {
+		if r.wt == nil && !r.header && r.e.Path == f.path && (r.group == groupStaged) == (f.base == diffStaged) {
 			a.scm.row = i
 			if a.scm.section == scmChanges {
 				a.app.repositories.cursor = a.git.repo.Root + ":" + r.key

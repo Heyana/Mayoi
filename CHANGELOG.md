@@ -5,6 +5,14 @@ needs a `## <version>` section here, or its build fails.
 
 ## Unreleased
 
+- Source Control's **All Worktree Changes** lists the other worktrees, leaving out the one whose changes are above it, with the lines and files each changed, and follows worktrees made or removed while folded; it hides when there is no other.
+- Each worktree starts folded under **All Worktree Changes**, which starts open and shows their counts.
+- Files of another worktree open a read-only diff of that worktree without switching windows.
+- A diff of another worktree shows only the buttons that open it, and its tab names the worktree.
+- **All Worktree Changes** reads other worktrees again every 5 s while open, or while a diff of one shows.
+- Rows of another worktree's files show their folder, and **Left** goes back up to the worktree.
+- A worktree whose folder is gone no longer lets the section say every worktree is clean.
+- Refreshing **All Worktree Changes** keeps the counts it shows rather than blanking them.
 - Switches at the top of the project rail toggle activity vs. manual order and full vs. compact rows.
 - Dragging a project on the rail switches to manual order and preserves the visible order.
 - Full project rail rows show uncommitted line counts (`+12 −3`) and last activity time.

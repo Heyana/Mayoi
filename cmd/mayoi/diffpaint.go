@@ -1869,30 +1869,35 @@ func (a *app) fileButtons(c *ui.Context, v *diffView, f *diffFile, right, y floa
 		fn    func()
 	}
 	var bs []button
-	if f.base == diffLocal {
+	switch {
+	case f.base == diffLocal:
 		bs = append(bs,
 			button{iconOpenFile, locales.DiffOpenLeft(), func() { a.openFileAt(f.path, 0, true) }},
 			button{iconOpenFile, locales.DiffOpenRight(), func() { a.openFileAt(f.peerPath, 0, true) }},
 		)
-	} else if f.letter != 'D' || f.base == diffStaged {
+	case f.letter != 'D' || f.base == diffStaged:
 		bs = append(bs, button{iconOpenFile, openLabel(e), func() { a.openFileAt(f.path, 0, true) }})
 	}
-	switch {
-	case f.base == diffLocal:
-	case f.base == diffCommit:
-	case f.base == diffStaged:
-		bs = append(bs, button{iconMinus, locales.UnstageChanges(), func() { ctx.unstage(entryPaths(e, true)...) }})
-	default:
-		if !e.Submodule() {
-			if f.letter == 'D' && !e.Untracked() {
-				bs = append(bs, button{iconUndo, locales.DiffRestoreFile(), func() { a.restoreDeletedFile(e) }})
-			} else if e.Untracked() {
-				bs = append(bs, button{iconUndo, locales.DiffRemoveFile(), func() { ctx.discard(e) }})
-			} else {
-				bs = append(bs, button{iconUndo, locales.DiscardChangesEllipsis(), func() { ctx.discard(e) }})
+	// A file of a worktree beside the window's is read here, not changed:
+	// its header opens it, and offers nothing that would change it.
+	if !f.readOnly {
+		switch {
+		case f.base == diffLocal:
+		case f.base == diffCommit:
+		case f.base == diffStaged:
+			bs = append(bs, button{iconMinus, locales.UnstageChanges(), func() { ctx.unstage(entryPaths(e, true)...) }})
+		default:
+			if !e.Submodule() {
+				if f.letter == 'D' && !e.Untracked() {
+					bs = append(bs, button{iconUndo, locales.DiffRestoreFile(), func() { a.restoreDeletedFile(e) }})
+				} else if e.Untracked() {
+					bs = append(bs, button{iconUndo, locales.DiffRemoveFile(), func() { ctx.discard(e) }})
+				} else {
+					bs = append(bs, button{iconUndo, locales.DiscardChangesEllipsis(), func() { ctx.discard(e) }})
+				}
 			}
+			bs = append(bs, button{iconPlus, locales.StageChanges(), func() { ctx.stage(e.Path) }})
 		}
-		bs = append(bs, button{iconPlus, locales.StageChanges(), func() { ctx.stage(e.Path) }})
 	}
 	if len(bs) == 0 {
 		return ui.Rect{}

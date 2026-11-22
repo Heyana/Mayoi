@@ -251,6 +251,14 @@ type app struct {
 	repositories             repositoryState
 	commitTools              commitTools
 	scm                      scmState
+	// outsideGit are the work trees beside the window's own that the
+	// source control view read, by their root, with the status the view
+	// read of them, so that a diff of them lists its files. They stay out
+	// of repositories.contexts: the window's repositories, its picker and
+	// its count of changes remain its own. outsideRead are the roots being
+	// read for a diff of a restored tab.
+	outsideGit  map[string]*gitContext
+	outsideRead map[string]bool
 
 	// treeOpening follows the folders of the tree as they open.
 	treeOpening treeOpening

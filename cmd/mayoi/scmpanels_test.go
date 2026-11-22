@@ -623,9 +623,15 @@ func TestScmRemotesStayAcrossBranchReads(t *testing.T) {
 	settleScmPanels(t, hs)
 	p := &a.scm.panels
 	a.switchScmPanelTab(scmRemotesTab)
-	rows := a.scmRows()
-	if r := rows[len(rows)-1]; r.panel == nil || r.panel.label != "Loading…" {
-		t.Fatalf("remotes not yet read: %+v", r.panel)
+	loading := false
+	for _, r := range a.scmRows() {
+		if r.panel != nil && r.panel.label == "Loading…" {
+			loading = true
+			break
+		}
+	}
+	if !loading {
+		t.Fatal("remotes not yet read")
 	}
 	settleScmPanels(t, hs)
 	a.switchScmPanelTab(scmBranchesTab)

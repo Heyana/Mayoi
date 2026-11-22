@@ -192,6 +192,10 @@ type Prefs struct {
 	ScmRepositoryOpen bool `json:"scmRepositoryOpen,omitempty"`
 	// ScmRemotes selects Remotes instead of Branches in the repository panel.
 	ScmRemotes bool `json:"scmRemotes,omitempty"`
+	// ScmWorktreesOpen remembers whether the all worktree changes section
+	// is expanded, which it is at first: its worktrees start folded, and
+	// their counts show without opening one.
+	ScmWorktreesOpen bool `json:"scmWorktreesOpen"`
 	// Blame shows who last changed the caret's line, and when, after it.
 	Blame bool `json:"blame"`
 	// Vim edits with vim's keys: the editors start in normal mode.
@@ -533,7 +537,7 @@ func Default() *Settings {
 			FontSize: 13, FontFamily: "monospace", FontWeight: 400, LineHeight: 1.55, TabSize: 4,
 			AutoSave: true, Blame: true, TerminalCopyOnSelect: true, TerminalBackendHcShowInHerdr: true, PreviewMermaid: true, PreviewMath: true,
 			DiffAlignedRows: true, DiffContext: 3, DiffSyncScroll: true, MergeAutoApply: true,
-			UsageStats: true,
+			UsageStats: true, ScmWorktreesOpen: true,
 		},
 	}
 }
@@ -1082,7 +1086,7 @@ func (s *Settings) OnPrefsWritten(fn func()) {
 // projects on the rail, by folders of this machine, and the hc to run
 // with its environment, which may hold secrets and runs as a terminal
 // opens, and the folders of Claude Code of this machine.
-var unsynced = []string{"scmRepositoryOpen", "scmRemotes", "syncIgnored", "projectTabStyle", "terminalBackendHcPath", "terminalBackendHcEnv", "agentSessionsClaudeDirs"}
+var unsynced = []string{"scmRepositoryOpen", "scmRemotes", "scmWorktreesOpen", "syncIgnored", "projectTabStyle", "terminalBackendHcPath", "terminalBackendHcEnv", "agentSessionsClaudeDirs"}
 
 // PrefKeys are the keys of the preferences in the settings' file.
 var PrefKeys = func() []string {

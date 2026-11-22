@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"mayoi/internal/bg"
 	"mayoi/internal/git"
+	"mayoi/internal/remote"
 )
 
 // gitContext binds source control state, UI and asynchronous commands to a
@@ -129,6 +130,8 @@ func (a *app) resetRepositories() {
 		}
 	}
 	a.repositories = repositoryState{}
+	// The work trees read for the view belong to the folder left behind.
+	a.outsideGit, a.outsideRead = nil, nil
 }
 
 func (a *app) refreshGit() {
@@ -141,6 +144,14 @@ func (a *app) refreshGit() {
 	a.discoverRepositories()
 	for _, ctx := range a.repositories.contexts {
 		ctx.refreshGit()
+	}
+	// A diff of a worktree beside the window's shows in the editor, where
+	// the section beside it may not: its worktrees are listed for it, and
+	// read again as the section's own would read them.
+	if a.outsideDiffOpen() {
+		root := a.repository()
+		root.refreshScmWorktrees()
+		root.autoRefreshScmWorktrees()
 	}
 	a.repository().refreshPR()
 	a.repository().refreshGitHub()
@@ -290,9 +301,18 @@ func (a *app) worktreePickerView(c *ui.Context) {
 
 // Diff tabs and their actions retain their repository when the history
 // picker changes. Legacy tabs without a root belong to the main work tree.
+// A tab of a worktree the window does not list reads that worktree's
+// status through outsideGit, which keeps the window's repositories as they
+// are.
 func (a *app) diffContext(v *diffView) *gitContext {
 	if v.repoRoot == "" {
 		return a.rootRepository()
+	}
+	if ctx := a.repositoryForRoot(v.repoRoot); ctx.git.repo != nil {
+		return ctx
+	}
+	if ctx := a.worktreeGit(v.repoRoot); ctx != nil {
+		return ctx
 	}
 	return a.repositoryForRoot(v.repoRoot)
 }
@@ -313,7 +333,15 @@ func (a *app) diffBelongs(v *diffView, root string) bool {
 	if root == "" && a.git.repo != nil {
 		root = a.git.repo.Root
 	}
-	return actual == root
+	switch {
+	case actual == root:
+		return true
+	case remote.Is(actual) || remote.Is(root):
+		return remote.Clean(actual) == remote.Clean(root)
+	}
+	// A folder spelled in another case, or with a trailing separator, names
+	// the same worktree on Windows.
+	return sameWorktreePath(actual, root)
 }
 func (a *gitContext) showChanges(target diffTarget, focus bool) {
 	if a.git.repo != nil {

@@ -291,6 +291,10 @@ type diffFile struct {
 	// prPath is the file's path in the repository when it is of a pull
 	// request's diff, whose header marks it viewed; "" for any other.
 	prPath string
+	// readOnly is set for a file of a worktree the window does not list:
+	// its changes are shown, but not staged or discarded here, which
+	// belongs to the window of that worktree.
+	readOnly bool
 }
 
 func newDiffFile(e git.Entry, group scmGroup) *diffFile {
@@ -330,6 +334,10 @@ func (f *diffFile) counts() (add, del int) {
 // unchanged away from them folded.
 type diffView struct {
 	repoRoot string // work tree that owns this view, fixed when opened
+	// worktree is the name of that work tree when it is one beside the
+	// window's, which the tab's title says to tell such tabs apart; "" for
+	// the window's own.
+	worktree string
 	layout   diffLayout
 	split    bool // as the layout and the width chose last
 	full     bool // every unchanged line shows
@@ -610,6 +618,9 @@ func (v *diffView) name() string {
 		}
 		return locales.DiffCommitName(git.ShortHash(c.hash))
 	}
+	if v.worktree != "" {
+		return locales.DiffChangesOfWorktree(v.worktree)
+	}
 	return locales.DiffChangesName()
 }
 
@@ -796,7 +807,7 @@ func (a *app) openChangesTab(focus bool, roots ...string) *diffView {
 	col := a.fileColumn()
 	at := min(col.active+1, len(col.tabs))
 	v := newDiffView(parseDiffLayout(a.settings.DiffLayout))
-	v.repoRoot = root
+	v.repoRoot, v.worktree = root, a.diffWorktreeName(root)
 	a.addTab(col, at, &colTab{diff: v})
 	a.activate(col, at, focus)
 	return v
@@ -976,6 +987,9 @@ func (a *app) listDiffFiles(v *diffView) {
 		return
 	}
 	v.status = st
+	// A worktree the window does not list shows its changes here, but
+	// stages and discards them in its own window.
+	outside := a.outsideContext(ctx)
 	groups := ctx.groupEntries()
 	type listed struct {
 		e     git.Entry
@@ -1013,6 +1027,7 @@ func (a *app) listDiffFiles(v *diffView) {
 		if !ok {
 			f := newDiffFile(l.e, l.group)
 			f.repoRoot = v.repoRoot
+			f.readOnly = outside
 			if v.foldFiles != nil {
 				f.folded = *v.foldFiles
 			}
@@ -1021,6 +1036,7 @@ func (a *app) listDiffFiles(v *diffView) {
 		}
 		delete(old, k)
 		f.group = l.group
+		f.readOnly = outside
 		f.setEntry(l.e)
 		v.files = append(v.files, f)
 	}
