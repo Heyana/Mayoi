@@ -169,7 +169,7 @@ func (a *app) editorReviewView(c *ui.Context, d *editor) bool {
 				if i >= n.from && i < n.to {
 					pt.Fill(ui.Rect{X: r.X, Y: y, W: r.W, H: v.tops[i+1] - v.tops[i]}, a.pal.selectedDim, 0)
 				}
-				a.paintDiffLine(pt, &v.file, true, i, -1, r.X+d.gutterW+gutterGap, y, ui.Color{}, cols, wrap)
+				a.paintDiffLine(pt, a.font, &v.file, true, i, -1, r.X+d.gutterW+gutterGap, y, ui.Color{}, cols, wrap)
 			}
 			// Paint the gutter over horizontally scrolled code, as the editor does.
 			x := r.X + v.scroll.X

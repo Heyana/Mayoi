@@ -352,6 +352,9 @@ type diffView struct {
 	preview     bool
 	markdown    *viewer
 	markdownDoc *document
+	// previewWait is set when a preview was asked for before the file of
+	// the diff finished loading: it opens once the file is read.
+	previewWait bool
 	// foldFiles is the last bulk choice, including files not yet listed.
 	// Once chosen, it also replaces automatic folding of large files.
 	foldFiles *bool
@@ -1313,6 +1316,21 @@ func (a *app) refreshDiffFile(v *diffView, f *diffFile) bool {
 			setDiffSide(&f.new, new, newLines)
 			if add, del := f.counts(); first && v.foldFiles == nil && add+del > foldedLines {
 				f.folded = true
+			}
+			// A preview waits for the file's text, and one open keeps it as
+			// the diff reads it again.
+			if v.previewWait && !v.preview {
+				a.toggleDiffPreview(v)
+			} else if v.preview && v.markdownDoc != nil && !v.markdownDoc.dirty() {
+				text := f.new.text
+				if text == "" && f.letter == 'D' {
+					text = f.old.text
+				}
+				if text != "" && text != v.markdownDoc.buf.String() {
+					v.markdownDoc.buf.Set(text)
+					v.markdownDoc.markSaved()
+					v.markdownDoc.measureWidest()
+				}
 			}
 			v.changed()
 		})
@@ -2453,17 +2471,30 @@ func (a *app) toggleDiffPreview(v *diffView) {
 		return
 	}
 	var doc *document
-	if f.base != diffCommit {
+	// The file of the work tree is the document it is open as; the changes
+	// staged or committed compare versions Git keeps, not the document.
+	if f.base == diffHead || f.base == diffIndex {
 		if i := a.docIndex(f.path); i >= 0 {
 			doc = a.docs[i]
 		}
 	}
 	if doc == nil {
+		if f.binary {
+			a.tell(note{message: locales.PreviewEmpty()})
+			return
+		}
 		text := f.new.text
 		if text == "" && f.letter == 'D' {
 			text = f.old.text
 		}
-		if text == "" || f.binary {
+		if text == "" {
+			// A file still loading has no text yet: the preview waits for it.
+			if !f.loaded {
+				v.previewWait = true
+				a.refreshDiffFile(v, f)
+				a.invalidate()
+				return
+			}
 			a.tell(note{message: locales.PreviewEmpty()})
 			return
 		}
@@ -2475,6 +2506,7 @@ func (a *app) toggleDiffPreview(v *diffView) {
 	v.markdown = newPreviewViewer(doc)
 	v.markdown.markdown = &markdownPreview{}
 	v.preview = true
+	v.previewWait = false
 	a.invalidate()
 }
 

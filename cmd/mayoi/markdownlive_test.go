@@ -1086,3 +1086,30 @@ func TestMarkdownModeSticksToFile(t *testing.T) {
 		t.Fatalf("a opens again as %q, want its source", got)
 	}
 }
+
+// A file switched back to its source keeps that over the mode Markdown
+// opens in: the source is a choice the file remembers, not a forgotten one.
+func TestMarkdownSourceSticksOverDefaultMode(t *testing.T) {
+	hs := newHarness(t, false)
+	hs.gitRepo()
+	a := hs.a
+	a.settings.MarkdownMode = "live"
+	dir := t.TempDir()
+	pa, pb := filepath.Join(dir, "a.md"), filepath.Join(dir, "b.md")
+	os.WriteFile(pa, []byte("# A\n\nbody\n"), 0o644)
+	os.WriteFile(pb, []byte("# B\n\nbody\n"), 0o644)
+	a.previewFile(pa)
+	hs.settle()
+	if got := markdownMode(a.activeEditor()); got != "live" {
+		t.Fatalf("a opens as %q, want the default live", got)
+	}
+	a.setMarkdownMode("")
+	hs.settle()
+	a.previewFile(pb)
+	hs.settle()
+	a.previewFile(pa)
+	hs.settle()
+	if got := markdownMode(a.activeEditor()); got != "" {
+		t.Fatalf("a opens again as %q, want its source", got)
+	}
+}

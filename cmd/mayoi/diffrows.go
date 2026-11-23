@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"sync"
+	"unicode"
 	"unicode/utf8"
 
 	"golang.org/x/text/width"
@@ -293,57 +296,183 @@ func diffWrapAt(f codeFont, shown string, cols int) []int {
 		return wrapAt(shown, cols)
 	}
 	maxW := float32(cols) * f.charW
-	if f.width(shown) <= maxW {
+	shape := diffWrapShapeOf(f, shown)
+	if len(shape.ends) == 0 || shape.cum[len(shape.cum)-1] <= maxW {
 		return nil
 	}
-	// ends are where each rune of shown ends, ends[0] being where it starts.
-	// A row's end is then a bisection over them, which measures a few widths
-	// where stepping a rune at a time measured one per rune, costing a long
-	// line of wide glyphs its length squared.
-	ends := make([]int, 1, len(shown)+1)
-	for i := 0; i < len(shown); {
-		_, n := utf8.DecodeRuneInString(shown[i:])
-		i += n
-		ends = append(ends, i)
-	}
+	// Each row is a bisection over the clusters' cumulative widths, which are
+	// shaped once per line: a resize measures nothing.
 	var out []int
-	for at := 0; at < len(ends)-1; {
-		start := ends[at]
-		// next is where the row after this one starts: the first rune that
-		// no longer fits within maxW.
-		lo, hi := at, len(ends)-1
+	si := 0 // the cluster the row starts at
+	for si < len(shape.ends) {
+		lo, hi := si, len(shape.ends)-1
 		for lo < hi {
 			mid := (lo + hi + 1) / 2
-			if f.width(shown[start:ends[mid]]) <= maxW {
+			if shape.cum[mid]-shape.cum[si] <= maxW {
 				lo = mid
 			} else {
 				hi = mid - 1
 			}
 		}
-		next := lo
-		if next <= at {
-			// A rune wider than the row goes in it alone.
-			next = at + 1
+		ei := lo
+		if ei <= si {
+			// A cluster wider than the row goes in it alone.
+			ei = si + 1
 		}
-		if ends[next] >= len(shown) {
+		if ei >= len(shape.ends)-1 {
 			break
 		}
-		end := ends[next]
+		start, end := shape.ends[si], shape.ends[ei]
+		next := ei
 		if sp := strings.LastIndexByte(shown[start:end], ' '); sp >= 0 {
 			after := start + sp + 1
-			if after > start && f.width(shown[start:after]) > maxW/2 {
+			if ai := shape.clusterEndingAt(after, si, ei); ai >= 0 && shape.cum[ai]-shape.cum[si] > maxW/2 {
 				end = after
-				// The row after starts past the space, at the rune that follows
-				// it: walk back to that rune.
-				for next > at && ends[next-1] >= after {
-					next--
-				}
+				// The row after starts past the space, at the cluster that
+				// follows it.
+				next = ai
 			}
 		}
 		out = append(out, end)
-		at = next
+		si = next
 	}
 	return out
+}
+
+// diffWrapShape is a line shaped for wrapping: where its grapheme clusters
+// end in shown, ends[0] being where it starts, and how wide each prefix of
+// them comes to, cum[k] being the width of the first k clusters.
+type diffWrapShape struct {
+	ends []int
+	cum  []float32
+}
+
+// clusterEndingAt returns where the cluster that ends at b sits in ends,
+// between i and j, -1 where no cluster ends there.
+func (s diffWrapShape) clusterEndingAt(b, i, j int) int {
+	for k := i; k < j; k++ {
+		if s.ends[k] == b {
+			return k
+		}
+	}
+	return -1
+}
+
+const diffWrapShapesKept = 1024
+
+// diffWrapShapes is the shaping of the lines wrapped: a line and a font
+// shape once, and every resize and frame of it bisects over the widths,
+// rather than shaping each prefix it measures again.
+var diffWrapShapes struct {
+	sync.Mutex
+	m   map[diffWrapShapeKey]diffWrapShape
+	gen int
+}
+
+type diffWrapShapeKey struct {
+	font  string
+	shown string
+}
+
+// diffWrapShapeOf returns the shaped clusters of shown in f, shaping them
+// the first time the line and font are asked for.
+func diffWrapShapeOf(f codeFont, shown string) diffWrapShape {
+	key := diffWrapShapeKey{font: wrapFontKey(f), shown: shown}
+	diffWrapShapes.Lock()
+	defer diffWrapShapes.Unlock()
+	if s, ok := diffWrapShapes.m[key]; ok {
+		return s
+	}
+	ends := make([]int, 1, len(shown)+1)
+	cum := make([]float32, 1, len(shown)+1)
+	for i := 0; i < len(shown); {
+		end := graphemeEnd(shown, i)
+		cum = append(cum, cum[len(cum)-1]+f.width(shown[i:end]))
+		ends = append(ends, end)
+		i = end
+	}
+	s := diffWrapShape{ends: ends, cum: cum}
+	if diffWrapShapes.m == nil {
+		diffWrapShapes.m = map[diffWrapShapeKey]diffWrapShape{}
+	}
+	if len(diffWrapShapes.m) >= diffWrapShapesKept {
+		diffWrapShapes.m = map[diffWrapShapeKey]diffWrapShape{}
+	}
+	diffWrapShapes.m[key] = s
+	return s
+}
+
+// wrapFontKey names a font, for the shaping of lines in it.
+func wrapFontKey(f codeFont) string {
+	return f.family + "\x00" + strconv.FormatFloat(float64(f.size), 'g', -1, 32) + "\x00" +
+		strconv.Itoa(f.weight) + "\x00" + f.features
+}
+
+// graphemeEnd returns where the grapheme cluster of s that starts at i
+// ends: a base rune with the marks, emoji modifiers and joiners that go
+// with it, a flag's two regional indicators, a Hangul syllable's jamo, and
+// a CR of its LF.
+func graphemeEnd(s string, i int) int {
+	r, n := utf8.DecodeRuneInString(s[i:])
+	end := i + n
+	if r == '\r' && end < len(s) && s[end] == '\n' {
+		return end + 1
+	}
+	regional := isRegional(r)
+	joined := false // the join's rune, in an emoji joined to this one
+	for end < len(s) {
+		r2, n2 := utf8.DecodeRuneInString(s[end:])
+		switch {
+		case joined:
+			joined = false
+		case r2 == 0x200D:
+			joined = true
+		case isClusterExtend(r2):
+			// A mark, a selector or a modifier of the rune before it.
+		case regional && isRegional(r2):
+			regional = false
+		case isHangulExtend(r, r2):
+		default:
+			return end
+		}
+		end += n2
+		r = r2
+	}
+	return end
+}
+
+// isRegional reports whether r is a regional indicator, of the pair a flag
+// is written with.
+func isRegional(r rune) bool { return r >= 0x1F1E6 && r <= 0x1F1FF }
+
+// isClusterExtend reports whether r extends the cluster of the rune before
+// it: a combining mark, a variation selector, a skin tone, a keycap, a tag.
+func isClusterExtend(r rune) bool {
+	switch {
+	case unicode.Is(unicode.Mn, r), unicode.Is(unicode.Mc, r), unicode.Is(unicode.Me, r):
+		return true
+	case r >= 0xFE00 && r <= 0xFE0F, r >= 0xE0100 && r <= 0xE01EF: // variation selectors
+		return true
+	case r >= 0x1F3FB && r <= 0x1F3FF: // skin tones
+		return true
+	case r >= 0xE0020 && r <= 0xE007F: // tags
+		return true
+	}
+	return false
+}
+
+// isHangulExtend reports whether r joins the cluster of prev as a Hangul
+// syllable's vowel or final consonant.
+func isHangulExtend(prev, r rune) bool {
+	switch {
+	case prev >= 0x1100 && prev <= 0x115F, prev >= 0xA960 && prev <= 0xA97F: // an initial, which takes a vowel or a final
+		return r >= 0x1160 && r <= 0x11FF || r >= 0xD7B0 && r <= 0xD7FB
+	case prev >= 0x1160 && prev <= 0x11A7, prev >= 0xD7B0 && prev <= 0xD7C6: // a vowel, which takes a final
+		return r >= 0x11A8 && r <= 0x11FF || r >= 0xD7CB && r <= 0xD7FB
+	case prev >= 0xAC00 && prev <= 0xD7A3: // a syllable, which takes a final
+		return (prev-0xAC00)%28 == 0 && (r >= 0x11A8 && r <= 0x11FF || r >= 0xD7CB && r <= 0xD7FB)
+	}
+	return false
 }
 
 // wrapCount returns how many rows a line takes as it wraps at cols

@@ -183,17 +183,14 @@ func (a *app) setLive(d *editor, on bool) {
 
 // rememberMarkdownMode keeps how a Markdown file shows, for the next time
 // it opens: a tab replaced, as the preview tab is by a click on another
-// file, opens again as it was left.
+// file, opens again as it was left. Its source is kept as an empty mode,
+// which the file remembers over the settings' default.
 func (a *app) rememberMarkdownMode(d *editor) {
 	doc := d.document
 	if doc.path == "" || !isMarkdown(doc) {
 		return
 	}
 	mode := markdownMode(d)
-	if mode == "" {
-		delete(a.window.MarkdownModes, doc.path)
-		return
-	}
 	if a.window.MarkdownModes == nil {
 		a.window.MarkdownModes = map[string]string{}
 	}

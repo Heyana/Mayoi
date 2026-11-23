@@ -3,7 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
+
+	"mayoi/internal/git"
 )
 
 // A diff of one Markdown file shows that file rendered, as reading does,
@@ -99,5 +102,59 @@ func TestDiffPreviewsOnlyOneFile(t *testing.T) {
 	hs.settle()
 	if v.preview {
 		t.Fatal("a preview opened over two files")
+	}
+}
+
+// A preview of a commit shows the file as the commit has it, not as the
+// document open beside the diff, and it keeps up as the diff reads again.
+func TestDiffPreviewReadsTheCommitNotTheOpenDocument(t *testing.T) {
+	hs := newHarness(t, false)
+	gitCmd := hs.gitRepo()
+	md := hs.path("notes.md")
+	if err := os.WriteFile(md, []byte("# Old\n\nold text\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCmd("add", "notes.md")
+	gitCmd("commit", "-qm", "old notes")
+	hash := strings.TrimSpace(gitCmd("rev-parse", "HEAD"))
+	if err := os.WriteFile(md, []byte("# New\n\nnew text\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hs.settleGit()
+	// The document of the work tree holds what the working copy has.
+	hs.a.previewFile(md)
+	hs.settle()
+	hs.a.showCommit(git.Commit{Hash: hash}, true)
+	hs.settleDiff(hs.a.activeTab().diff)
+	v := hs.a.activeTab().diff
+	hs.a.toggleDiffPreview(v)
+	hs.settle()
+	if v.markdown == nil || v.markdown.doc == nil {
+		t.Fatal("the preview did not open")
+	}
+	if got := v.markdown.doc.buf.String(); !strings.Contains(got, "# Old") || strings.Contains(got, "# New") {
+		t.Fatalf("the preview shows %q, want the commit's text", got)
+	}
+	// The preview of a file of the work tree reads it again as it changes.
+	hs.a.showChanges(diffTarget{path: md, base: diffIndex}, true)
+	hs.settle()
+	v = hs.a.activeTab().diff
+	hs.a.toggleDiffPreview(v)
+	hs.settle()
+	if v.markdown.doc == nil || !strings.Contains(v.markdown.doc.buf.String(), "# New") {
+		t.Fatalf("the preview is of %v", v.markdown)
+	}
+	if err := os.WriteFile(md, []byte("# Newer\n\nnewer text\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f := previewFile(v)
+	if f == nil {
+		t.Fatal("no file to preview")
+	}
+	f.gitStale = true
+	hs.a.refreshDiff(v)
+	hs.settleGit()
+	if got := v.markdown.doc.buf.String(); !strings.Contains(got, "# Newer") {
+		t.Fatalf("the preview kept %q after the diff read again", got)
 	}
 }

@@ -607,7 +607,7 @@ func (a *app) diffPaneUI(c *ui.Context, v *diffView) {
 									tx := r.X + float32(side)*l.right() + l.textX
 									a.paintDiffSel(pt, v, i, side, tx, ys, l.cols[side], focused)
 									a.paintDiffHits(pt, v, file, row, side, tx, ys, l.cols[side])
-									a.paintDiffLine(pt, file, side == 1, n, peer, tx, ys, tint, l.cols[side], wrap)
+									a.paintDiffLine(pt, a.diffFont, file, side == 1, n, peer, tx, ys, tint, l.cols[side], wrap)
 								})
 								numCol := p.gutter
 								switch {
@@ -646,7 +646,7 @@ func (a *app) diffPaneUI(c *ui.Context, v *diffView) {
 					pt.Clip(ui.Rect{X: vx + l.textX - 4, Y: vy, W: view.W - l.textX + 4, H: view.H}, 0, func() {
 						a.paintDiffSel(pt, v, i, -1, r.X+l.textX, y, l.cols[0], focused)
 						a.paintDiffHits(pt, v, file, row, -1, r.X+l.textX, y, l.cols[0])
-						a.paintDiffLine(pt, file, newSide, n, row.peer, r.X+l.textX, y, tint, l.cols[0], wrap)
+						a.paintDiffLine(pt, a.diffFont, file, newSide, n, row.peer, r.X+l.textX, y, tint, l.cols[0], wrap)
 					})
 					// The gutter, which stays as the text scrolls sideways.
 					gut := ui.Rect{X: vx, Y: y, W: l.textX - 4, H: h}
@@ -1728,11 +1728,11 @@ func diffSpans(file *diffFile, newSide bool, n, peer int, h diffHighlight) []lin
 	return ws[0]
 }
 
-// paintDiffLine paints line n of a side of a file of a diff at x, y: its
-// words that changed from the line peer of the other side, then its text
-// in the colors of its tokens, on rows cols wide as it wraps.
-func (a *app) paintDiffLine(pt *ui.Painter, file *diffFile, newSide bool, n, peer int, x, y float32, tint ui.Color, cols int, wrap bool) {
-	f, p := a.diffFont, a.pal
+// paintDiffLine paints line n of a side of a file of a diff at x, y in f:
+// its words that changed from the line peer of the other side, then its
+// text in the colors of its tokens, on rows cols wide as it wraps.
+func (a *app) paintDiffLine(pt *ui.Painter, f codeFont, file *diffFile, newSide bool, n, peer int, x, y float32, tint ui.Color, cols int, wrap bool) {
+	p := a.pal
 	s := file.side(newSide)
 	if n < 0 || n >= len(s.lines) {
 		return

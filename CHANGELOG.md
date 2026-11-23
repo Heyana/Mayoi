@@ -5,7 +5,9 @@ needs a `## <version>` section here, or its build fails.
 
 ## Unreleased
 
-- Source Control's **All Worktree Changes** lists the other worktrees, leaving out the one whose changes are above it, with the lines and files each changed, and follows worktrees made or removed while folded; it hides when there is no other.
+- **All Worktree Changes** in Source Control lists the other worktrees, with the lines and files each changed.
+- It leaves out the worktree whose changes are above it, and hides when there is no other.
+- It follows worktrees made or removed while folded.
 - Each worktree starts folded under **All Worktree Changes**, which starts open and shows their counts.
 - Files of another worktree open a read-only diff of that worktree without switching windows.
 - A diff of another worktree shows only the buttons that open it, and its tab names the worktree.
@@ -19,16 +21,18 @@ needs a `## <version>` section here, or its build fails.
 - The project rail sorts projects by most recent commit or working-tree change by default.
 - Selected commits in Source Control show total lines gained and lost, and multi-selection diffs their range.
 - Commit file panels show per-file `+/−` line counts and open the chosen file alone in the diff.
-- Added the Solarized Light theme and listed it in **Settings**.
-- Markdown tabs reopen in the mode they were left in (`Source`, `Live Preview`, or `Reading`).
+- Added the Solarized Light theme, in **Settings** and **View › Theme**.
+- Markdown tabs reopen in the mode they were left in (**Source**, **Live Preview**, or **Reading**).
 - Source Control file rows and group headers show working-tree `+/−` line counts.
 - Branch and worktree buttons show counts when there is more than one, and worktrees show uncommitted counts.
 - Removing the last linked worktree clears the worktree count badge in Source Control.
 - Wrapped diff lines now wrap wide characters inside the pane instead of clipping on the right.
+- Wrapped diff lines keep emoji, flags and combining marks whole where they break.
+- Diffs at small editor sizes no longer draw larger than the editor's text.
 - Diffs render one size smaller than the editor while Source Control lists render one size larger.
 - Single-Markdown-file diffs include a **Reading** toggle button in the breadcrumbs.
 - Project rail rows show each project's logo or initials, branch ahead/behind counts, and changed file count.
-- The project rail fetches upstreams periodically in the background and refreshes counts after Git actions.
+- The project rail fetches upstreams in the background only with `railFetch` on, which is off by default.
 - Added `mayoi projects` (`list`, `add`, `remove`, `label`, `unlabel`) for managing rail projects via CLI.
 - Added a title-bar recent commits panel showing each project's 24h, 7d, and 30d commits and line totals.
 - The Markdown Reading view shows an HTML `<table>` as a table, with its cells' alignment and pictures.
