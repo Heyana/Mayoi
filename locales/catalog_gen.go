@@ -3338,6 +3338,16 @@ func (msgs Messages) CmdViewScm() string {
 	return Catalog.Format(msgs.locale, "cmdViewScm", nil)
 }
 
+// CmdViewStats says "Recent commits"
+// in the language the app shows.
+func CmdViewStats() string { return In(i18n.Locale()).CmdViewStats() }
+
+// CmdViewStats says "Recent commits"
+// in the language of msgs.
+func (msgs Messages) CmdViewStats() string {
+	return Catalog.Format(msgs.locale, "cmdViewStats", nil)
+}
+
 // CmdViewSearch says "Search"
 // in the language the app shows.
 func CmdViewSearch() string { return In(i18n.Locale()).CmdViewSearch() }
@@ -15310,6 +15320,26 @@ func PrefDescBlame() string { return In(i18n.Locale()).PrefDescBlame() }
 // in the language of msgs.
 func (msgs Messages) PrefDescBlame() string {
 	return Catalog.Format(msgs.locale, "prefDescBlame", nil)
+}
+
+// PrefTitleRailFetch says "Fetch on the Rails"
+// in the language the app shows.
+func PrefTitleRailFetch() string { return In(i18n.Locale()).PrefTitleRailFetch() }
+
+// PrefTitleRailFetch says "Fetch on the Rails"
+// in the language of msgs.
+func (msgs Messages) PrefTitleRailFetch() string {
+	return Catalog.Format(msgs.locale, "prefTitleRailFetch", nil)
+}
+
+// PrefDescRailFetch says "Asks each project's remote, of late, for the commits its branch is behind by. Off, the rail asks nothing of the network."
+// in the language the app shows.
+func PrefDescRailFetch() string { return In(i18n.Locale()).PrefDescRailFetch() }
+
+// PrefDescRailFetch says "Asks each project's remote, of late, for the commits its branch is behind by. Off, the rail asks nothing of the network."
+// in the language of msgs.
+func (msgs Messages) PrefDescRailFetch() string {
+	return Catalog.Format(msgs.locale, "prefDescRailFetch", nil)
 }
 
 // PrefTitleScmTree says "Changes as Tree"

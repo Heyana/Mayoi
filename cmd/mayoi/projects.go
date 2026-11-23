@@ -73,6 +73,9 @@ type frame struct {
 	// railWidth is how wide the rail it drew is, for the names of its
 	// projects: the squares alone, or as wide as the longest name.
 	railWidth float32
+	// railLabels are the names cut to the room of their rows, by name and
+	// width, so a long name is measured once rather than in every frame.
+	railLabels map[railLabelKey]string
 	// stats is the panel of recent commits of its projects, at the title
 	// bar's button.
 	stats statsState
@@ -159,6 +162,9 @@ func (m *mayoi) newFrame(h *desktop) *frame {
 		a.post(func() { a.blurred = false })
 		a.post(a.gitChanged)
 		a.post(a.wake)
+		// The rail read nothing while the window was behind: it does once
+		// this frame draws.
+		f.invalidate()
 		// The File menu's recent folders leave out this one's.
 		m.refreshMenu()
 	})
@@ -185,28 +191,42 @@ func (m *mayoi) newFrame(h *desktop) *frame {
 	// The last window to close quits the app, and stays in the settings
 	// to open again, as do those the quitting closes. The others keep
 	// their folders' sessions.
-	win.OnClosed(func() {
-		f.stop()
-		m.frames = slices.DeleteFunc(m.frames, func(o *frame) bool { return o == f })
-		// A window whose projects moved to another has none left here.
-		for _, h := range f.tabs {
-			h.a.keepSession()
-			h.a.closeTerminals()
-			h.a.shutdown()
-			m.wins = slices.DeleteFunc(m.wins, func(w *desktop) bool { return w == h })
-		}
-		if m.life != lifeClosing && len(m.wins) > 0 {
-			for _, h := range f.tabs {
-				m.s.Forget(h.a.window)
-			}
-		}
-		if len(m.wins) == 0 {
-			m.s.Flush()
-			// The settings window goes with the last, which quits the app.
-			m.closePrefs()
-		}
-	})
+	win.OnClosed(func() { m.frameClosed(f) })
 	return f
+}
+
+// closeFrame closes the window, or, for a window a test built with none,
+// takes it apart as closing it does.
+func (m *mayoi) closeFrame(f *frame) {
+	if f.win != nil {
+		f.win.Close()
+		return
+	}
+	m.frameClosed(f)
+}
+
+// frameClosed takes the window out of the app as it closes: its projects
+// keep their sessions for the next time their folders open.
+func (m *mayoi) frameClosed(f *frame) {
+	f.stop()
+	m.frames = slices.DeleteFunc(m.frames, func(o *frame) bool { return o == f })
+	// A window whose projects moved to another has none left here.
+	for _, h := range f.tabs {
+		h.a.keepSession()
+		h.a.closeTerminals()
+		h.a.shutdown()
+		m.wins = slices.DeleteFunc(m.wins, func(w *desktop) bool { return w == h })
+	}
+	if m.life != lifeClosing && len(m.wins) > 0 {
+		for _, h := range f.tabs {
+			m.s.Forget(h.a.window)
+		}
+	}
+	if len(m.wins) == 0 {
+		m.s.Flush()
+		// The settings window goes with the last, which quits the app.
+		m.closePrefs()
+	}
 }
 
 // beforeClose tells whether the window may close now. With changes of
@@ -293,7 +313,13 @@ func (f *frame) view(c *ui.Context) {
 
 // add puts h at the end of the rail, without showing it.
 func (f *frame) add(h *desktop) {
+	h.mu.Lock()
 	h.f = f
+	h.mu.Unlock()
+	// Work left in flight as the project's last window closed is not waited
+	// for here: its flags start clear, so its row reads again and never
+	// stays busy.
+	h.changesAt, h.changesBusy, h.fetchBusy = time.Time{}, false, false
 	h.a.stats, f.stats.f = &f.stats, f
 	f.tabs = append(f.tabs, h)
 	h.a.rail = func(c *ui.Context) { f.railView(c, h.a) }
@@ -413,9 +439,46 @@ func (f *frame) invalidate() {
 	}
 }
 
+// post runs fn in the window the project is in now, if it still is one:
+// work its rail's reads started lands there even after it moved.
+func (h *desktop) post(fn func()) {
+	h.mu.Lock()
+	f := h.f
+	h.mu.Unlock()
+	if f != nil {
+		f.post(fn)
+	}
+}
+
+// invalidate requests a redraw of the window the project is in now.
+func (h *desktop) invalidate() {
+	if f := h.f; f != nil {
+		f.invalidate()
+	}
+}
+
+// railAwake tells whether the window shows enough to read its projects'
+// counts: one minimized, out of sight or behind another app does not.
+func (f *frame) railAwake() bool {
+	f.mu.Lock()
+	win := f.win
+	f.mu.Unlock()
+	if win == nil {
+		// A tester's, which has no window.
+		return true
+	}
+	if !win.IsVisible() || win.IsMinimized() {
+		return false
+	}
+	return f.active == nil || !f.active.a.blurred
+}
+
 // scheduleRailTick arranges a single window-wide redraw after
 // railChangesEvery so Git counts refresh without spawning a timer per project.
 func (f *frame) scheduleRailTick() {
+	if !f.railAwake() {
+		return
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.railWake || f.closed || f.life != lifeOpen {
@@ -619,13 +682,22 @@ func (m *mayoi) dropProject(h *desktop) {
 	m.wins = slices.DeleteFunc(m.wins, func(w *desktop) bool { return w == h })
 	m.s.Forget(a.window)
 	f.tabs = slices.Delete(f.tabs, i, i+1)
+	// It is in no window now: a read in flight lands in the one it goes
+	// to next, rather than in this one.
+	h.mu.Lock()
+	h.f = nil
+	h.mu.Unlock()
 	if f.active == h {
 		f.active = nil
-		f.activate(f.tabs[min(i, len(f.tabs)-1)])
+		if len(f.tabs) > 0 {
+			f.activate(f.tabs[min(i, len(f.tabs)-1)])
+		}
 	}
 	f.setTarget()
 	f.keepRail()
-	f.win.Invalidate()
+	if f.win != nil { // a tester's has none
+		f.win.Invalidate()
+	}
 }
 
 // projectTabsChanged gathers the windows into the one in front, as project
@@ -714,20 +786,55 @@ func railWidthFor(names []string, counts float32) float32 {
 	return min(w, railMaxW)
 }
 
-// railFitShort cuts a name to the room its square has, its end in an
-// ellipsis.
+// railLabelKey is a name and the room a row gives it, as railLabel cuts it.
+type railLabelKey struct {
+	name  string
+	width float32
+}
+
+// railLabel cuts a name to the room its row has, its end in an ellipsis,
+// once per name and room: a long name measures once rather than in every
+// frame, and the panel's cache of shapes keeps the room for what it draws.
+func (f *frame) railLabel(name string, width float32) string {
+	k := railLabelKey{name, width}
+	if l, ok := f.railLabels[k]; ok {
+		return l
+	}
+	l := railFitShort(name, width)
+	if f.railLabels == nil || len(f.railLabels) >= 256 {
+		// The room of a row changes with the window, and what a wider one
+		// asked for is no use in a narrower one: the cache starts again.
+		f.railLabels = make(map[railLabelKey]string, 8)
+	}
+	f.railLabels[k] = l
+	return l
+}
+
+// railFitShort cuts a name to the room its row has, its end in an ellipsis:
+// the longest cut that fits, which a bisection finds as each more rune only
+// widens it.
 func railFitShort(name string, width float32) string {
 	if labelShape(name, railNameSize).w <= width {
 		return name
 	}
 	r := []rune(name)
-	for len(r) > 1 {
-		r = r[:len(r)-1]
-		if cut := string(r) + "\u2026"; labelShape(cut, railNameSize).w <= width {
-			return cut
+	if len(r) <= 1 {
+		return "\u2026"
+	}
+	fit := func(k int) bool { return labelShape(string(r[:k])+"\u2026", railNameSize).w <= width }
+	if !fit(1) {
+		return "\u2026"
+	}
+	lo, hi := 1, len(r)-1
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if fit(mid) {
+			lo = mid
+		} else {
+			hi = mid - 1
 		}
 	}
-	return "\u2026"
+	return string(r[:lo]) + "\u2026"
 }
 
 // railOrder is the projects in the order their rows show: the one that
@@ -791,7 +898,7 @@ func (f *frame) railView(c *ui.Context, a *app) {
 	// whether a project has a logo or not.
 	labels := make([]string, len(tabs))
 	for i, name := range names {
-		labels[i] = railFitShort(name, width-railPad-counts)
+		labels[i] = f.railLabel(name, width-railPad-counts)
 	}
 	rail.Children(func() {
 		f.railTools(c, a)
@@ -1025,11 +1132,23 @@ func railName(dir string) (name, where string) {
 // finished or failed while the project was out of sight, in the color of
 // its state, and, while a program works, a ring turning around it. label is what it shows without a logo,
 // unless the project has a label of its own.
-// hasRepository reports whether dir holds a repository, which a worktree
-// of one does with a .git file.
+// hasRepository reports whether dir is in a repository, which it is with a
+// .git of its own or of a folder above it, as a worktree of one does with a
+// .git file and a folder of a repository with its root's.
 func hasRepository(dir string) bool {
-	_, err := os.Stat(filepath.Join(dir, ".git"))
-	return err == nil
+	if dir == "" || remote.Is(dir) {
+		return false
+	}
+	for dir = filepath.Clean(dir); ; {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return false
+		}
+		dir = parent
+	}
 }
 
 // railChangesEvery is how often the square's count of changed files is
@@ -1177,9 +1296,18 @@ func railWhen(at, now time.Time) string {
 // no one's, or one not read yet.
 func (f *frame) railChanges(h *desktop) int {
 	dir := h.a.folder()
-	if dir == "" || h.a.conn != nil || !hasRepository(dir) {
-		// A remote folder is not read from here, nor one no repository
-		// holds.
+	if dir == "" || h.a.conn != nil {
+		// A remote folder is not read from here, nor one with no folder.
+		return 0
+	}
+	if !f.railAwake() {
+		// A window out of sight or behind another app reads nothing of its
+		// projects, and reads them again as it comes back to the front.
+		return h.changes
+	}
+	// A folder no repository held when last read is not asked again within
+	// the interval, which finds one made there since.
+	if h.repoDir == dir && !h.hasRepo && time.Since(h.repoAt) < railChangesEvery {
 		return 0
 	}
 	// Git did something here since the read: the counts are stale at once,
@@ -1189,8 +1317,10 @@ func (f *frame) railChanges(h *desktop) int {
 		return h.changes
 	}
 	// Whether the branch is due a fetch is decided here, of the rail's
-	// own field, so the read below only sees a copy of it.
-	due := time.Since(h.fetchedAt) >= railFetchEvery
+	// own field, so the read below only sees a copy of it: a fetch asks a
+	// remote, which only the window in front does, and only when the
+	// preference asks for it.
+	due := f.m.s.RailFetch && time.Since(h.fetchedAt) >= railFetchEvery
 	// The lines a work tree gained and lost cost a diff of every change,
 	// so they are read less often than the status.
 	dueLines := time.Since(h.linesAt) >= railLinesEvery || h.a.railOpAt.After(h.linesAt)
@@ -1230,11 +1360,12 @@ func (f *frame) railChanges(h *desktop) int {
 				}
 			}
 		}
-		f.post(func() {
+		h.post(func() {
 			if h.changesGen != gen {
 				return
 			}
 			h.changesAt, h.changesBusy = time.Now(), false
+			h.hasRepo, h.repoDir, h.repoAt = r != nil, dir, time.Now()
 			if st != nil {
 				h.changes, h.ahead, h.behind = len(st.Entries), st.Ahead, st.Behind
 			}
@@ -1256,7 +1387,7 @@ func (f *frame) railChanges(h *desktop) int {
 				upstream := st.Upstream
 				bg.Go(func() {
 					err := r.FetchUpstream(upstream)
-					f.post(func() {
+					h.post(func() {
 						h.fetchBusy = false
 						if err != nil {
 							return
@@ -1264,7 +1395,7 @@ func (f *frame) railChanges(h *desktop) int {
 						// The fetch heard of the commits: read them again,
 						// at once.
 						h.changesAt = time.Time{}
-						f.invalidate()
+						h.invalidate()
 					})
 				})
 			}

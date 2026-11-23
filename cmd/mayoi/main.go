@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -33,7 +34,10 @@ import (
 type desktop struct {
 	m *mayoi
 	a *app
-	f *frame // the window it is in
+	// mu guards f for work off the main thread, which posts what it read
+	// to the window the project is in now.
+	mu sync.Mutex
+	f  *frame // the window it is in
 	// logoDir is the folder the logo scan is for, logoIcon the icon of
 	// its own it tried first, logoSrc its favicon or logo once decoded,
 	// logoDone whether it was scanned, logoScannedAt when, and logoGen
@@ -68,6 +72,13 @@ type desktop struct {
 	// behind, and fetchBusy while that fetch runs.
 	fetchedAt time.Time
 	fetchBusy bool
+	// hasRepo is whether Git found a repository for its folder when its
+	// changes were last read, repoDir the folder it looked in, and repoAt
+	// when: a folder no repository holds is not asked in every frame, and
+	// one made there is found within the interval.
+	hasRepo bool
+	repoDir string
+	repoAt  time.Time
 }
 
 // lifecycle is how far the app, or a window, is along closing: open,

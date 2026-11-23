@@ -21,6 +21,7 @@ import (
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
+	"mayoi/internal/cli"
 	"mayoi/internal/remote"
 	"mayoi/internal/settings"
 	"mayoi/locales"
@@ -593,7 +594,16 @@ func TestRailFetchesWhatItsBranchFellBehind(t *testing.T) {
 		t.Fatalf("the branch does not look even with its upstream:\n%s", out)
 	}
 
-	_, tabs, tt := railFixture(t, hs.root, workspaceFixture(t))
+	f, tabs, tt := railFixture(t, hs.root, workspaceFixture(t))
+	// The rail asks its remote only when the preference asks for it, and
+	// the read it began as the panel drew came before this: that one is
+	// waited for, and the next reads with the preference on.
+	f.m.s.RailFetch = true
+	for tabs[0].changesBusy {
+		step(tt)
+		time.Sleep(5 * time.Millisecond)
+	}
+	tabs[0].changesAt = time.Time{}
 	deadline := time.Now().Add(5 * time.Second)
 	for tabs[0].behind != 1 && time.Now().Before(deadline) {
 		step(tt)
@@ -2088,5 +2098,83 @@ func TestRailPostsRaceWithSwitchingAndClosing(t *testing.T) {
 	f.mu.Unlock()
 	if !closed || target != nil {
 		t.Errorf("after stop the window is closed=%v, posts go to %v", closed, target)
+	}
+}
+
+// mayoi projects remove takes the projects off their rail, and closes the
+// window a last one leaves without a project, as closing its last tab does.
+func TestProjectsRemoveClosesTheLastProjectWindow(t *testing.T) {
+	root, other := workspaceFixture(t), workspaceFixture(t)
+	f, hs, _ := railFixture(t, root, other)
+	m := f.m
+	remove := func(dirs ...string) string {
+		var said cli.Reply
+		var failed string
+		m.serveProjects(&cli.Projects{Verb: "remove", Folders: dirs},
+			func(r cli.Reply) { said = r },
+			func(format string, args ...any) { failed = fmt.Sprintf(format, args...) })
+		if failed != "" {
+			return failed
+		}
+		return said.Error
+	}
+	// One of two tabs goes, and the window keeps the other.
+	if got := remove(other); got != "" {
+		t.Fatalf("remove said %q", got)
+	}
+	if len(f.tabs) != 1 || f.active != hs[0] || hs[1].f != nil || len(m.wins) != 1 {
+		t.Fatalf("removing one of two projects left %d tabs, %d projects, %v in a window, %v shown", len(f.tabs), len(m.wins), hs[1].f, f.active)
+	}
+	// The last one closes its window rather than leaving it with none.
+	if got := remove(root); got != "" {
+		t.Fatalf("remove of the last project said %q", got)
+	}
+	if len(m.wins) != 0 || !f.closed {
+		t.Fatalf("removing the last project left %d projects, closed %v", len(m.wins), f.closed)
+	}
+}
+
+// A command that names every project of its window takes it apart at once,
+// and one naming a project twice leaves the other of its tabs.
+func TestProjectsRemoveEveryProject(t *testing.T) {
+	root, other := workspaceFixture(t), workspaceFixture(t)
+	f, _, _ := railFixture(t, root, other)
+	m := f.m
+	var said cli.Reply
+	var failed string
+	m.serveProjects(&cli.Projects{Verb: "remove", Folders: []string{root, root}},
+		func(r cli.Reply) { said = r },
+		func(format string, args ...any) { failed = fmt.Sprintf(format, args...) })
+	if failed != "" || said.Error != "" || len(f.tabs) != 1 || f.active == nil {
+		t.Fatalf("removing one of two projects twice: %q %q, %d tabs", failed, said.Error, len(f.tabs))
+	}
+	root, other = workspaceFixture(t), workspaceFixture(t)
+	f, _, _ = railFixture(t, root, other)
+	m = f.m
+	m.serveProjects(&cli.Projects{Verb: "remove", Folders: []string{root, other}},
+		func(r cli.Reply) { said = r },
+		func(format string, args ...any) { failed = fmt.Sprintf(format, args...) })
+	if failed != "" || said.Error != "" || len(f.tabs) == 0 && !f.closed {
+		t.Fatalf("removing every project: %q %q, %d tabs, closed %v", failed, said.Error, len(f.tabs), f.closed)
+	}
+}
+
+// A folder inside a repository is in one, as a monorepo's own folders are,
+// and one outside any is not.
+func TestHasRepositoryFindsTheOneAbove(t *testing.T) {
+	dir := t.TempDir()
+	gitAt(t, dir, time.Time{}, "init", "-q", "-b", "main")
+	sub := filepath.Join(dir, "internal", "a")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if !hasRepository(sub) || !hasRepository(dir) {
+		t.Error("a folder of a repository is not in one")
+	}
+	if hasRepository(t.TempDir()) {
+		t.Error("a folder outside any repository is in one")
+	}
+	if hasRepository("host:/srv/thing") {
+		t.Error("a remote folder is in one here")
 	}
 }

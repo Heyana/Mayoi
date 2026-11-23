@@ -138,6 +138,11 @@ func (a *app) commandsIn(t locales.Messages) []command {
 		{"view.compactFolders", t.CmdViewCompactFolders(), "", a.toggleCompactFolders},
 		{"view.search", t.CmdViewSearch(), "", func() { a.showSearch(false) }},
 		{"view.scm", t.CmdViewScm(), "Ctrl+Shift+G", a.showSourceControl},
+		{"view.stats", t.CmdViewStats(), "", func() {
+			if a.stats != nil {
+				a.stats.toggle()
+			}
+		}},
 		{"view.sessions", t.CmdViewSessions(), "", a.showSessions},
 		{"view.github", t.CmdViewGitHub(), "", a.showGitHub},
 		{"git.commit", t.CmdGitCommit(), "", func() { a.commit(false) }},
@@ -591,6 +596,9 @@ func (a *app) menu(cli bool, run func(id string, win *mygo.Window)) *mygo.Menu {
 	sessions.Disabled = !a.hasSessions()
 	github := item("view.github")
 	github.Disabled = !a.hasGitHub()
+	// The panel of recent commits is of the window's projects.
+	stats := item("view.stats")
+	stats.Disabled = a.stats == nil
 	// A folder's own settings are of a folder on this machine.
 	folderSettings := item("file.folderSettings")
 	folderSettings.Disabled = a.root == "" || remote.Is(a.root)
@@ -683,7 +691,7 @@ func (a *app) menu(cli bool, run func(id string, win *mygo.Window)) *mygo.Menu {
 			item("sel.format"), item("sel.insertSnippet"), item("sel.complete"),
 		}},
 		{Label: locales.MenuView(), Submenu: []*mygo.MenuItem{
-			item("view.sidebar"), checkbox("view.sidebarRight", a.settings.SidebarRight), item("view.explorer"), item("view.search"), item("view.scm"), github, sessions, mygo.Separator(),
+			item("view.sidebar"), checkbox("view.sidebarRight", a.settings.SidebarRight), item("view.explorer"), item("view.search"), item("view.scm"), stats, github, sessions, mygo.Separator(),
 			checkbox("view.compactFolders", a.settings.ExplorerCompactFolders), mygo.Separator(),
 			checkbox("view.wordWrap", a.prefs().WordWrap), item("view.wordWrapTab"), item("view.togglePreview"), item("view.toggleLivePreview"), item("view.previewToSide"),
 			{Label: locales.MenuOpenMarkdownAs(), Submenu: []*mygo.MenuItem{

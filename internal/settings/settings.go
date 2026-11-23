@@ -198,6 +198,10 @@ type Prefs struct {
 	ScmWorktreesOpen bool `json:"scmWorktreesOpen"`
 	// Blame shows who last changed the caret's line, and when, after it.
 	Blame bool `json:"blame"`
+	// RailFetch has the rail ask each project's remote, of late, for the
+	// commits the branch is behind by, so its count hears of work made
+	// elsewhere. Off, a person's work asks nothing of the network.
+	RailFetch bool `json:"railFetch,omitempty"`
 	// Vim edits with vim's keys: the editors start in normal mode.
 	Vim bool `json:"vim,omitempty"`
 	// VimCtrlKeys has vim's normal mode take ⌃F, ⌃B and ⌃R on Windows and

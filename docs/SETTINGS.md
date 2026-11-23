@@ -105,6 +105,7 @@ takes its default.
 | `scmTree`               | `false`       | `true`, `false`                                             | **View as Tree** in Source Control's menu      |
 | `scmAllBranches`        | `false`       | `true`, `false`                                             | **Show All Branches** in Source Control's menu |
 | `prDeleteBranch`        | `false`       | `true`, `false`                                             | **Merge** in a pull request's tab             |
+| `railFetch`             | `false`       | `true`, `false`                                             | Only this file                                 |
 | `syncIgnored`           | none          | Keys, `"settings.json"`, `"keybindings.json"`               | The [settings sync](#settings-sync) panel      |
 | `aiModel`               | `""`          | `""` (`deepseek-flash`), or a model of the AI gateway       | Only this file                                 |
 | `aiSecretFiles`         | none          | Patterns of files AI commit messages send by name only      | Only this file                                 |
@@ -246,6 +247,9 @@ differ in width lines them up only roughly.
 - **`scmAllBranches`** shows the commits of every branch and tag, not only those of the branch checked out.
 - **`prDeleteBranch`** has **Merge** in a pull request's tab delete its branch on GitHub once it merged, when the
   branch is of the same repository. The branch of the work tree stays.
+- **`railFetch`** has the rail ask each project's remote, every half hour at most, for the commits its branch is
+  behind by, so the count by its name hears of work made elsewhere. Off, the rail asks nothing of the network, and
+  **Fetch** in Source Control is the way to hear of those commits.
 - **`aiModel`** is the model of Mon's AI gateway that writes commit messages, `deepseek-flash` when empty. The models
   your account can use are listed at `https://mon.sorrycc.dev/api/v1/ai/v1/models`.
 - **`crashReports`** is what Mayoi does at launch with the crash logs of the last runs: `""` asks whether to send them

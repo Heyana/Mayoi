@@ -154,6 +154,12 @@ func (m *mayoi) serve(req cli.Request, reply func(cli.Reply)) {
 // serveProjects lists the projects of the rail, adds folders to it, or
 // takes them away, as `mayoi projects` asks.
 func (m *mayoi) serveProjects(p *cli.Projects, reply func(cli.Reply), fail func(string, ...any)) {
+	// A request made by the app itself, or by an older command, asks what
+	// the mayoi command would have checked.
+	if err := p.Check(); err != nil {
+		fail("%s", err)
+		return
+	}
 	switch p.Verb {
 	case "", "list":
 		// A folder a line, its label after a tab where it has one, so a
@@ -203,7 +209,9 @@ func (m *mayoi) serveProjects(p *cli.Projects, reply func(cli.Reply), fail func(
 				fail("no project has %s open", dir)
 				return
 			}
-			hs = append(hs, h)
+			if !slices.Contains(hs, h) {
+				hs = append(hs, h)
+			}
 		}
 		for _, h := range hs {
 			// A person's window asks before it closes changed files; the
@@ -217,10 +225,41 @@ func (m *mayoi) serveProjects(p *cli.Projects, reply func(cli.Reply), fail func(
 				}
 			}
 		}
+		// The projects go off their rails; a window each of whose projects
+		// goes closes, as closing its last tab does.
+		var frames []*frame
 		for _, h := range hs {
-			m.dropProject(h)
+			if f := h.f; f != nil && !slices.Contains(frames, f) {
+				frames = append(frames, f)
+			}
 		}
+		var closes []*frame
+		for _, f := range frames {
+			gone := 0
+			for _, h := range hs {
+				if h.f == f {
+					gone++
+				}
+			}
+			if gone >= len(f.tabs) {
+				closes = append(closes, f)
+			}
+		}
+		for _, h := range hs {
+			if !slices.Contains(closes, h.f) {
+				m.dropProject(h)
+			}
+		}
+		// Answered before the window closes, which on the last one ends
+		// the app.
 		reply(cli.Reply{})
+		for _, f := range closes {
+			m.closeFrame(f)
+		}
+	default:
+		// An answer either way: a command that waits on one would wait
+		// forever for no reply.
+		fail("unknown projects command %q", p.Verb)
 	}
 }
 

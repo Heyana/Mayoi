@@ -345,7 +345,7 @@ func Parse(args []string, cwd string) (Request, error) {
 			return r, errors.New("projects takes only its folders")
 		}
 		r.Projects.resolve(abs)
-		if err := r.Projects.check(); err != nil {
+		if err := r.Projects.Check(); err != nil {
 			return r, err
 		}
 	case sub != "" && (r.Paths != nil || r.Diff != nil || r.Remote != "" || r.NewWindow || r.Wait):
@@ -400,9 +400,10 @@ func (p *Projects) word(arg string) error {
 	return nil
 }
 
-// check asks for a folder where a verb needs one, and none where it does
-// not.
-func (p *Projects) check() error {
+// Check asks for a folder where a verb needs one, and none where it does
+// not, as the app also does for a request that came from elsewhere than
+// the mayoi command.
+func (p *Projects) Check() error {
 	switch p.Verb {
 	case "add", "remove":
 		if len(p.Folders) == 0 {

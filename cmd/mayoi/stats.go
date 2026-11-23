@@ -28,6 +28,10 @@ var statSpanLong = [statSpans]time.Duration{24 * time.Hour, 7 * 24 * time.Hour, 
 // it comes cheap.
 const statsEvery = time.Minute
 
+// statWorkers is how many projects the panel reads at once: each read runs
+// git, and a window of many repositories must not start them all together.
+const statWorkers = 6
+
 // statsAmount is a count of commits, and of the lines they added and
 // deleted.
 type statsAmount struct {
@@ -115,7 +119,7 @@ func (st *statsState) read(now time.Time) {
 		return
 	}
 	manual := f.m.s.RailOrder == "manual"
-	post, draw := f.active.a.post, f.active.a.invalidate
+	post, draw := f.post, f.invalidate
 	// The numbers of the last read show before this one answers, and the rows
 	// are made again from them each time the panel is read, so that a project
 	// added, removed or renamed, or the rail's order changed, shows then,
@@ -150,10 +154,15 @@ func (st *statsState) read(now time.Time) {
 				draw()
 			})
 		}
+		// A few projects read at a time: a rail of many repositories reads
+		// them six at once rather than all at once.
+		sem := make(chan struct{}, statWorkers)
 		for i := range dirs {
+			sem <- struct{}{}
 			wg.Add(1)
 			go func(i int, old *statRead) {
 				defer wg.Done()
+				defer func() { <-sem }()
 				reads[i] = readOneStat(dirs[i], old, now)
 			}(i, prev[dirs[i]])
 		}
@@ -202,10 +211,13 @@ func (st *statsState) read(now time.Time) {
 func countsOf(dirs, names []string, manual bool, now time.Time) []statsRow {
 	rows := make([]statsRow, len(dirs))
 	var wg sync.WaitGroup
+	sem := make(chan struct{}, statWorkers)
 	for i := range dirs {
+		sem <- struct{}{}
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
+			defer func() { <-sem }()
 			rows[i].dir, rows[i].name = dirs[i], names[i]
 			r, err := git.Open(dirs[i])
 			if err != nil {

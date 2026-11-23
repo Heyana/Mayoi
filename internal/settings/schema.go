@@ -110,6 +110,7 @@ var Schema = []Field{
 	{Key: "scmTree", Category: CatGit, Kind: KindBool},
 	{Key: "scmAllBranches", Category: CatGit, Kind: KindBool},
 	{Key: "prDeleteBranch", Category: CatGit, Kind: KindBool},
+	{Key: "railFetch", Category: CatGit, Kind: KindBool},
 	{Key: "aiModel", Category: CatGit, Kind: KindText, Folder: true},
 	{Key: "aiSecretFiles", Category: CatGit, Kind: KindList},
 	{Key: "scmRepositoryOpen", Category: CatGit, Kind: KindBool, Memory: true},

@@ -1,13 +1,17 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
+
 	"mayoi/internal/bg"
 	"mayoi/internal/cli"
+	"mayoi/locales"
 )
 
 // A command acts on the project whose folder holds the directory it ran
@@ -104,4 +108,56 @@ func TestWaitClosed(t *testing.T) {
 	if done != 2 {
 		t.Errorf("%d done as the project closes", done)
 	}
+}
+
+// A projects command that asks for a folder it has none of, or one the app
+// does not know, is answered rather than panicking or waiting forever.
+func TestProjectsCommandAnswersWhatItCannotDo(t *testing.T) {
+	m := &mayoi{}
+	for _, c := range []struct {
+		p    cli.Projects
+		want string
+	}{
+		{cli.Projects{Verb: "label", Label: "MG", HasLabel: true}, "label takes a folder"},
+		{cli.Projects{Verb: "label", Folders: []string{"/tmp/a"}}, "label takes a folder"},
+		{cli.Projects{Verb: "unlabel"}, "unlabel takes one folder"},
+		{cli.Projects{Verb: "remove"}, "remove needs a folder"},
+		{cli.Projects{Verb: "nope"}, `unknown projects command "nope"`},
+	} {
+		var failed string
+		m.serveProjects(&c.p, func(cli.Reply) { t.Errorf("%+v answered without a fault", c.p) },
+			func(format string, args ...any) { failed = fmt.Sprintf(format, args...) })
+		if !strings.Contains(failed, c.want) {
+			t.Errorf("%+v said %q, want %q", c.p, failed, c.want)
+		}
+	}
+}
+
+// The panel of recent commits opens from the commands and the View menu,
+// which keeps it off while no window has one.
+func TestViewStatsCommand(t *testing.T) {
+	hs := newHarness(t, false)
+	a := hs.a
+	if !strings.Contains(a.commandList(), "view.stats\t") {
+		t.Errorf("commands list no view.stats:\n%s", a.commandList())
+	}
+	find := func(label string) *mygo.MenuItem {
+		var walk func(items []*mygo.MenuItem) *mygo.MenuItem
+		walk = func(items []*mygo.MenuItem) *mygo.MenuItem {
+			for _, it := range items {
+				if it.Label == label {
+					return it
+				}
+				if r := walk(it.Submenu); r != nil {
+					return r
+				}
+			}
+			return nil
+		}
+		return walk(a.menu(false, func(string, *mygo.Window) {}).Items())
+	}
+	if it := find(locales.CmdViewStats()); it == nil || !it.Disabled {
+		t.Fatalf("the View menu's %s: %+v", locales.CmdViewStats(), it)
+	}
+	a.run("view.stats")
 }
