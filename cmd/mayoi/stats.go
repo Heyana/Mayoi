@@ -116,11 +116,16 @@ func (st *statsState) read(now time.Time) {
 	}
 	manual := f.m.s.RailOrder == "manual"
 	post, draw := f.active.a.post, f.active.a.invalidate
-	// The numbers of the last read show before this one answers, and a
-	// read that ran a moment ago is not run again.
-	if len(st.reads) > 0 && len(st.rows) == 0 {
+	// The numbers of the last read show before this one answers, and the rows
+	// are made again from them each time the panel is read, so that a project
+	// added, removed or renamed, or the rail's order changed, shows then,
+	// even while a read that ran a moment ago keeps it from reading the
+	// commits again.
+	if len(st.reads) > 0 {
 		st.rows = st.rowsOf(dirs, names, manual, now)
-		draw()
+		if st.open {
+			draw()
+		}
 	}
 	if !st.at.IsZero() && now.Sub(st.at) < statsEvery {
 		return
@@ -128,6 +133,7 @@ func (st *statsState) read(now time.Time) {
 	gen := st.gen + 1
 	st.busy, st.gen = true, gen
 	prev := st.reads
+	since := now.Add(-statSpanLong[statSpans-1])
 	reads := make([]*statRead, len(dirs))
 	// Each project reads on its own: a repository of thousands of commits
 	// takes a moment, and the others must not wait for it.
@@ -152,9 +158,25 @@ func (st *statsState) read(now time.Time) {
 			}(i, prev[dirs[i]])
 		}
 		wg.Wait()
-		next := make(map[string]*statRead, len(prev)+len(reads))
+		next := make(map[string]*statRead, len(dirs)+len(prev))
+		wanted := make(map[string]bool, len(dirs))
+		for _, dir := range dirs {
+			wanted[dir] = true
+		}
 		for dir, r := range prev {
-			next[dir] = r
+			if r == nil {
+				continue
+			}
+			if wanted[dir] {
+				next[dir] = r
+				continue
+			}
+			// A project out of the rail keeps its numbers only while the commits
+			// they count are still inside the month: the cache is the panel's
+			// projects, not every one it was ever opened on.
+			if kept := within(r.Commits, since); len(kept) > 0 {
+				next[dir] = &statRead{Dir: r.Dir, At: r.At, Head: r.Head, Commits: kept}
+			}
 		}
 		for _, r := range reads {
 			if r != nil {
@@ -175,7 +197,8 @@ func (st *statsState) read(now time.Time) {
 }
 
 // countsOf is what the panel shows before it reads a diff: how many each
-// project committed over each span.
+// project committed over each span, in the order the rows a read makes will
+// keep.
 func countsOf(dirs, names []string, manual bool, now time.Time) []statsRow {
 	rows := make([]statsRow, len(dirs))
 	var wg sync.WaitGroup
@@ -188,12 +211,17 @@ func countsOf(dirs, names []string, manual bool, now time.Time) []statsRow {
 			if err != nil {
 				return
 			}
-			rows[i].latest = r.HeadTime()
 			me := r.Identity()
 			for s := 0; s < statSpans; s++ {
 				if n, err := r.CountSince(now.Add(-statSpanLong[s]), me); err == nil {
 					rows[i].count[s].Commits = n
 				}
+			}
+			// A project that made no commit of its own within the month is
+			// last, as the rows a read makes put it; the others are ordered by
+			// their branch's last commit, the nearest time the counts can tell.
+			if rows[i].count[statSpans-1].Commits > 0 {
+				rows[i].latest = r.HeadTime()
 			}
 		}(i)
 	}

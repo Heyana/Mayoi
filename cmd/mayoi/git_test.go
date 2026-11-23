@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 
@@ -3240,4 +3241,100 @@ func TestDiffWrapWideChars(t *testing.T) {
 	if lineRows != len(breaks)+1 {
 		t.Errorf("row height %d, want %d", lineRows, len(breaks)+1)
 	}
+}
+
+// A line of wide glyphs breaks where walking its runes one at a time put
+// the breaks, the bisection measuring a few of its prefixes where the walk
+// measured one at each rune: the same breaks for a fraction of the work.
+func TestDiffWrapNonASCIIBreaks(t *testing.T) {
+	hs := newHarness(t, true)
+	hs.gitRepo()
+	f := hs.a.diffFont
+	if f.charW <= 0 {
+		t.Fatalf("no diff font: %+v", f)
+	}
+	line := "2. **编辑态是否隐藏侧栏**" + strings.Repeat("中文 测试 ", 20) + "(…), extra words at the end"
+	for _, cols := range []int{1, 4, 9, 17, 40, 120} {
+		got, want := diffWrapAt(f, line, cols), diffWrapAtSteps(f, line, cols)
+		if !slices.Equal(got, want) {
+			t.Fatalf("cols %d: breaks %v, want %v", cols, got, want)
+		}
+		if len(got) == 0 {
+			t.Fatalf("cols %d: a line of %d bytes took one row", cols, len(line))
+		}
+		// Each break starts a rune, and no row of more than one rune is
+		// wider than the columns it wraps within.
+		maxW := float32(cols) * f.charW
+		from := 0
+		for _, at := range append(slices.Clone(got), len(line)) {
+			if at <= from || at > len(line) {
+				t.Fatalf("cols %d: a break at %d after %d, in %d bytes", cols, at, from, len(line))
+			}
+			if at < len(line) && !utf8.RuneStart(line[at]) {
+				t.Fatalf("cols %d: a break inside a rune, at %d", cols, at)
+			}
+			if cols > 2 {
+				if w := f.width(line[from:at]); w > maxW+0.01 {
+					t.Fatalf("cols %d: the row %q is %.2f wide, over %.2f", cols, line[from:at], w, maxW)
+				}
+			}
+			from = at
+		}
+	}
+}
+
+// diffWrapAtSteps is the walk of a line's runes, each row measured at every
+// rune, that the bisection replaced: the breaks it found are the ones the
+// bisection must find.
+func diffWrapAtSteps(f codeFont, shown string, cols int) []int {
+	if cols < 1 || f.charW <= 0 || isASCII(shown) {
+		return wrapAt(shown, cols)
+	}
+	maxW := float32(cols) * f.charW
+	if f.width(shown) <= maxW {
+		return nil
+	}
+	var out []int
+	for start := 0; start < len(shown); {
+		if f.width(shown[start:]) <= maxW {
+			break
+		}
+		end, col := start, 0
+		for i, r := range shown[start:] {
+			w := runeCols(r)
+			if col > 0 && col+w > cols {
+				end = start + i
+				break
+			}
+			col += w
+			end = start + i + utf8.RuneLen(r)
+		}
+		for end > start && f.width(shown[start:end]) > maxW {
+			_, n := utf8.DecodeLastRuneInString(shown[start:end])
+			end -= n
+		}
+		for end < len(shown) {
+			_, n := utf8.DecodeRuneInString(shown[end:])
+			if f.width(shown[start:end+n]) > maxW {
+				break
+			}
+			end += n
+		}
+		if end <= start {
+			_, n := utf8.DecodeRuneInString(shown[start:])
+			end = start + n
+		}
+		if end >= len(shown) {
+			break
+		}
+		if sp := strings.LastIndexByte(shown[start:end], ' '); sp >= 0 {
+			after := start + sp + 1
+			if after > start && f.width(shown[start:after]) > maxW/2 {
+				end = after
+			}
+		}
+		out = append(out, end)
+		start = end
+	}
+	return out
 }

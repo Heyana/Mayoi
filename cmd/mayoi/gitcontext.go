@@ -147,11 +147,15 @@ func (a *app) refreshGit() {
 	}
 	// A diff of a worktree beside the window's shows in the editor, where
 	// the section beside it may not: its worktrees are listed for it, and
-	// read again as the section's own would read them.
+	// read again as the section's own would read them. A worktree is known
+	// through any of the repositories the window lists, and a window of
+	// nested repositories may show the diff of one that its section does
+	// not, so each of them refreshes its own.
 	if a.outsideDiffOpen() {
-		root := a.repository()
-		root.refreshScmWorktrees()
-		root.autoRefreshScmWorktrees()
+		for _, ctx := range a.repositories.contexts {
+			ctx.refreshScmWorktrees()
+			ctx.autoRefreshScmWorktrees()
+		}
 	}
 	a.repository().refreshPR()
 	a.repository().refreshGitHub()

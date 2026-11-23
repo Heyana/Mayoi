@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -180,4 +182,116 @@ func findRow(t *testing.T, rows []statsRow, dir string) statsRow {
 	}
 	t.Fatalf("the panel lists no line for %s", dir)
 	return statsRow{}
+}
+
+// What the rail names a project, and the order it puts it in, shows in the
+// panel at once, as the rows are made again from the numbers of the last
+// read even when a read that ran a moment ago is not run again.
+func TestStatsRowsFollowTheRailWithinTheReadInterval(t *testing.T) {
+	hs := newHarness(t, true)
+	hs.gitRepo()
+	now := time.Now()
+	dir := filepath.Join(t.TempDir(), "labelled")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitAt(t, dir, time.Time{}, "init", "-q", "-b", "main")
+	gitAt(t, dir, time.Time{}, "config", "user.email", "t@t")
+	writeLines(t, filepath.Join(dir, "README.md"), 3)
+	gitAt(t, dir, now.Add(-time.Hour), "add", "README.md")
+	gitAt(t, dir, now.Add(-time.Hour), "commit", "-q", "-m", "first")
+
+	f, ws, tt := railFixture(t, hs.root, dir)
+	f.stats.toggle()
+	waitFor(t, tt, &f.stats.busy)
+	if got, want := findRow(t, f.stats.rows, dir).name, filepath.Base(dir); got != want {
+		t.Fatalf("the row is named %q, want %q", got, want)
+	}
+
+	// A label given to the project shows on the next read of the panel, which
+	// reads nothing again within the interval it last read: what the numbers
+	// stand for is made again at once.
+	f.m.s.SetTabStyle(dir, settings.TabStyle{Label: "Renamed"})
+	before := f.stats.at
+	f.stats.read(time.Now())
+	if f.stats.at != before || f.stats.busy {
+		t.Fatal("the panel read the commits again within the interval it last read")
+	}
+	if got := findRow(t, f.stats.rows, dir).name; got != "Renamed" {
+		t.Fatalf("the row is named %q after the rail renamed the project, want %q", got, "Renamed")
+	}
+
+	// So does the order the rail was dragged to, once it is put in manually.
+	f.m.s.RailOrder = "manual"
+	f.m.s.Rail = []int{ws[1].a.window.ID, ws[0].a.window.ID}
+	f.stats.read(time.Now())
+	if first := f.stats.rows[0].dir; first != dir {
+		t.Fatalf("the panel starts with %q, want %q, the project the rail put first", first, dir)
+	}
+}
+
+// A project out of the rail keeps its numbers only while the commits they
+// count are still inside the month: one closed for longer goes, and
+// stats-cache.json stays the panel's projects.
+func TestStatsCacheDropsProjectsOutOfTheRail(t *testing.T) {
+	hs := newHarness(t, true)
+	hs.gitRepo()
+	now := time.Now()
+	dir := filepath.Join(t.TempDir(), "cache")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitAt(t, dir, time.Time{}, "init", "-q", "-b", "main")
+	gitAt(t, dir, time.Time{}, "config", "user.email", "t@t")
+	writeLines(t, filepath.Join(dir, "README.md"), 3)
+	gitAt(t, dir, now.Add(-2*time.Hour), "add", "README.md")
+	gitAt(t, dir, now.Add(-2*time.Hour), "commit", "-q", "-m", "first")
+
+	f, _, tt := railFixture(t, hs.root, dir)
+	saved := settings.Load(filepath.Join(t.TempDir(), "settings.json"))
+	saved.ProjectTabs = true
+	saved.Windows = f.m.s.Windows
+	f.m.s = saved
+	closed := filepath.Join(t.TempDir(), "closed")
+	recent := filepath.Join(t.TempDir(), "recent")
+	f.stats.reads = map[string]*statRead{
+		recent: {Dir: recent, At: now.Add(-time.Hour),
+			Commits: []statCommit{{Hash: "recent", When: now.Add(-time.Hour)}}},
+		closed: {Dir: closed, At: now.Add(-40 * 24 * time.Hour),
+			Commits: []statCommit{{Hash: "closed", When: now.Add(-40 * 24 * time.Hour)}}},
+	}
+	f.stats.toggle()
+	waitFor(t, tt, &f.stats.busy)
+	if _, ok := f.stats.reads[closed]; ok {
+		t.Fatalf("a project out of the rail for over a month is still read: %v", f.stats.reads)
+	}
+	if got := findRow(t, f.stats.rows, dir).count[0].Commits; got != 1 {
+		t.Fatalf("the project counts %d commits over the day, want 1", got)
+	}
+
+	// The file it saves keeps the same: the recent project stays, the one
+	// closed for longer goes.
+	var cache struct {
+		Projects []*statRead `json:"projects"`
+	}
+	path := f.stats.statsPath()
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+		if b, err := os.ReadFile(path); err == nil && json.Unmarshal(b, &cache) == nil && len(cache.Projects) > 0 {
+			break
+		}
+		step(tt)
+		time.Sleep(5 * time.Millisecond)
+	}
+	var dirs []string
+	for _, p := range cache.Projects {
+		if p != nil {
+			dirs = append(dirs, filepath.Base(p.Dir))
+		}
+	}
+	if slices.Contains(dirs, filepath.Base(closed)) {
+		t.Fatalf("stats-cache.json keeps a project out of the rail for over a month: %v", dirs)
+	}
+	if !slices.Contains(dirs, "recent") {
+		t.Fatalf("stats-cache.json dropped a project whose commits still count: %v", dirs)
+	}
 }

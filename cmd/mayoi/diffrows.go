@@ -296,47 +296,52 @@ func diffWrapAt(f codeFont, shown string, cols int) []int {
 	if f.width(shown) <= maxW {
 		return nil
 	}
+	// ends are where each rune of shown ends, ends[0] being where it starts.
+	// A row's end is then a bisection over them, which measures a few widths
+	// where stepping a rune at a time measured one per rune, costing a long
+	// line of wide glyphs its length squared.
+	ends := make([]int, 1, len(shown)+1)
+	for i := 0; i < len(shown); {
+		_, n := utf8.DecodeRuneInString(shown[i:])
+		i += n
+		ends = append(ends, i)
+	}
 	var out []int
-	for start := 0; start < len(shown); {
-		if f.width(shown[start:]) <= maxW {
+	for at := 0; at < len(ends)-1; {
+		start := ends[at]
+		// next is where the row after this one starts: the first rune that
+		// no longer fits within maxW.
+		lo, hi := at, len(ends)-1
+		for lo < hi {
+			mid := (lo + hi + 1) / 2
+			if f.width(shown[start:ends[mid]]) <= maxW {
+				lo = mid
+			} else {
+				hi = mid - 1
+			}
+		}
+		next := lo
+		if next <= at {
+			// A rune wider than the row goes in it alone.
+			next = at + 1
+		}
+		if ends[next] >= len(shown) {
 			break
 		}
-		end, col := start, 0
-		for i, r := range shown[start:] {
-			w := runeCols(r)
-			if col > 0 && col+w > cols {
-				end = start + i
-				break
-			}
-			col += w
-			end = start + i + utf8.RuneLen(r)
-		}
-		for end > start && f.width(shown[start:end]) > maxW {
-			_, n := utf8.DecodeLastRuneInString(shown[start:end])
-			end -= n
-		}
-		for end < len(shown) {
-			_, n := utf8.DecodeRuneInString(shown[end:])
-			if f.width(shown[start:end+n]) > maxW {
-				break
-			}
-			end += n
-		}
-		if end <= start {
-			_, n := utf8.DecodeRuneInString(shown[start:])
-			end = start + n
-		}
-		if end >= len(shown) {
-			break
-		}
+		end := ends[next]
 		if sp := strings.LastIndexByte(shown[start:end], ' '); sp >= 0 {
 			after := start + sp + 1
 			if after > start && f.width(shown[start:after]) > maxW/2 {
 				end = after
+				// The row after starts past the space, at the rune that follows
+				// it: walk back to that rune.
+				for next > at && ends[next-1] >= after {
+					next--
+				}
 			}
 		}
 		out = append(out, end)
-		start = end
+		at = next
 	}
 	return out
 }

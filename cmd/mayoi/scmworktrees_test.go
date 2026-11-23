@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,6 +65,59 @@ func openScmWorktrees(t *testing.T, hs *harness) *gitContext {
 	hs.settle()
 	settleScmWorktrees(t, hs, ctx)
 	return ctx
+}
+
+// A worktree root spelled through a link is the same worktree, and keeps one
+// key in the maps of the window: /var and /private/var name the same folders
+// on macOS, where a worktree made under one is listed under the other, and a
+// folder linked into another names it too.
+func TestScmWorktreePathFollowsLinks(t *testing.T) {
+	dir := t.TempDir()
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(dir, link); err != nil {
+		t.Skipf("this system makes no links: %v", err)
+	}
+	if !sameWorktreePath(dir, link) || !sameWorktreePath(link, dir) {
+		t.Fatalf("%q and %q are not one worktree", dir, link)
+	}
+	if k1, k2 := worktreeMapKey(dir), worktreeMapKey(link); k1 != k2 {
+		t.Fatalf("one worktree has the keys %q and %q", k1, k2)
+	}
+	// A folder that cannot be resolved, as a worktree's whose folder is gone,
+	// is cleaned rather than linked to another: it stays apart from the ones
+	// that exist.
+	gone := filepath.Join(link, "gone")
+	if sameWorktreePath(gone, dir) {
+		t.Fatalf("the missing folder %q is the folder it is in", gone)
+	}
+	if got, want := worktreeMapKey(gone), filepath.Clean(gone); got != want {
+		t.Fatalf("a missing folder has the key %q, want %q", got, want)
+	}
+}
+
+// findScmWorktreeFileRow finds the row of a file of a worktree, by the folder
+// it is in rather than by its spelling: the worktree it is in may be spelled
+// through a link, as a temporary folder is on macOS.
+func findScmWorktreeFileRow(t *testing.T, ctx *gitContext, path string) scmRow {
+	t.Helper()
+	for _, r := range ctx.scmRows() {
+		if r.wt != nil && r.wt.kind == "file" && r.wt.tree != nil && sameWorktreePath(r.wt.e.Path, path) {
+			return r
+		}
+	}
+	t.Fatalf("the section lists no file %s of a worktree", path)
+	return scmRow{}
+}
+
+// realPath is the folder path names, with the links on the way resolved, as
+// Git names a worktree: it is taken before a test removes the folder.
+func realPath(t *testing.T, path string) string {
+	t.Helper()
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return real
 }
 
 // findScmWorktreeRow finds a row of the section by key.
@@ -139,7 +191,7 @@ func TestScmWorktreesSection(t *testing.T) {
 	}
 	ctx.activateScmWorktreeRow(tree)
 	hs.settle()
-	file := findScmWorktreeRow(t, ctx, "worktree:"+tree.wt.tree.wt.Path+":"+fmt.Sprint(int(groupUntracked))+":"+filepath.Join(side, "side.go"))
+	file := findScmWorktreeFileRow(t, ctx, filepath.Join(side, "side.go"))
 	if file.wt.kind != "file" || !file.wt.e.Untracked() {
 		t.Fatalf("file row %+v", file.wt)
 	}
@@ -231,7 +283,7 @@ func TestScmWorktreesDiffOfLinkedWorktree(t *testing.T) {
 	}
 	ctx.activateScmWorktreeRow(tree)
 	hs.settle()
-	file := findScmWorktreeRow(t, ctx, "worktree:"+tree.wt.tree.wt.Path+":"+fmt.Sprint(int(groupChanges))+":"+filepath.Join(side, "main.go"))
+	file := findScmWorktreeFileRow(t, ctx, filepath.Join(side, "main.go"))
 	a := hs.a
 	a.repository().activateScmWorktreeRow(file)
 	hs.settle()
@@ -286,6 +338,7 @@ func TestScmWorktreesMissingWorktree(t *testing.T) {
 	hs, run, _ := scmWorktreeFixture(t)
 	gone := filepath.Join(t.TempDir(), "gone")
 	run("worktree", "add", "-b", "gone", gone)
+	gone = realPath(t, gone)
 	if err := os.RemoveAll(gone); err != nil {
 		t.Fatal(err)
 	}
@@ -416,6 +469,7 @@ func TestScmWorktreesMissingWorktreeIsNotClean(t *testing.T) {
 	run := hs.gitRepo()
 	gone := filepath.Join(t.TempDir(), "gone")
 	run("worktree", "add", "-b", "gone", gone)
+	gone = realPath(t, gone)
 	if err := os.RemoveAll(gone); err != nil {
 		t.Fatal(err)
 	}
@@ -572,7 +626,7 @@ func TestScmWorktreesOutsideDiffReadsChangesAgain(t *testing.T) {
 	tree := findScmWorktreeRowOf(t, ctx, side)
 	ctx.activateScmWorktreeRow(tree)
 	hs.settle()
-	file := findScmWorktreeRow(t, ctx, "worktree:"+tree.wt.tree.wt.Path+":"+fmt.Sprint(int(groupChanges))+":"+filepath.Join(side, "main.go"))
+	file := findScmWorktreeFileRow(t, ctx, filepath.Join(side, "main.go"))
 	hs.a.rootRepository().activateScmWorktreeRow(file)
 	hs.settle()
 	v := hs.a.activeTab().diff
@@ -656,5 +710,85 @@ func TestScmWorktreesDiffTabNamesTheWorktree(t *testing.T) {
 	hs.settle()
 	if got, want := a.activeTab().name(), locales.DiffChangesName(); got != want {
 		t.Fatalf("the window's changes are named %q, want %q", got, want)
+	}
+}
+
+// A window of nested repositories reads the worktrees of every repository it
+// lists, rather than those of the one its section shows alone: a diff of a
+// worktree may be open for a repository the window does not lead with.
+func TestScmWorktreesRefreshesEveryRepository(t *testing.T) {
+	hs := newHarness(t, true)
+	// The folder opened is no work tree itself: the repositories are those
+	// under it, and the section shows the first of them.
+	one, two := filepath.Join(hs.root, "one"), filepath.Join(hs.root, "two")
+	for _, dir := range []string{one, two} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		gitIn(t, dir, "init", "-q", "-b", "main")
+		if err := os.WriteFile(filepath.Join(dir, "repo.go"), []byte("package repo\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		gitIn(t, dir, "add", ".")
+		gitIn(t, dir, "commit", "-q", "-m", "first")
+	}
+	side := filepath.Join(t.TempDir(), "side")
+	gitIn(t, two, "worktree", "add", "-b", "side", side)
+	if err := os.WriteFile(filepath.Join(side, "side.go"), []byte("package side\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hs.a.openFolder(hs.root)
+	hs.settleGit()
+	deadline := time.Now().Add(settleTimeout)
+	var shown, other *gitContext
+	for shown == nil || other == nil {
+		hs.settle()
+		for _, c := range hs.a.repositories.contexts {
+			switch {
+			case c.git.repo != nil && sameWorktreePath(c.git.repo.Root, one):
+				shown = c
+			case c.git.repo != nil && sameWorktreePath(c.git.repo.Root, two):
+				other = c
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the repositories of the folder were never found")
+		}
+	}
+	if got := hs.a.repository(); got != shown {
+		t.Fatalf("the section shows %+v, not the first repository", got.git.repo)
+	}
+	hs.a.showChanges(diffTarget{base: diffIndex}, true, side)
+	hs.settle()
+	vd := hs.a.activeTab().diff
+	if vd == nil || !sameWorktreePath(vd.repoRoot, side) {
+		t.Fatalf("the changes opened are those of %+v", vd)
+	}
+	hs.settleDiff(vd)
+	// The section shows the first repository, and the second's worktree is
+	// listed and read for the diff alone.
+	w := &other.scm.worktrees
+	for {
+		hs.settle()
+		if tr := w.treeAt(side); tr != nil && tr.known() && len(vd.files) == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the worktree of the repository the section does not show was not read: %+v", w.trees)
+		}
+	}
+	// A file made in it shows in the diff without it being opened again.
+	if err := os.WriteFile(filepath.Join(side, "later.go"), []byte("package side\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hs.tt.Advance(worktreeStatusEvery + time.Second)
+	for {
+		hs.settle()
+		if len(vd.files) == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the diff of the worktree lists %d files, want 2", len(vd.files))
+		}
 	}
 }

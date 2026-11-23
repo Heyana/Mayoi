@@ -20,6 +20,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unicode"
@@ -94,6 +95,14 @@ type frame struct {
 	// the rail's Git counts on this window.
 	railWake  bool
 	railTimer *time.Timer
+	// mu guards what goroutines off the main thread read: target, life,
+	// closed, and the rail tick's wake and timer. active and tabs stay the
+	// main thread's alone; a goroutine asking where to post reads target.
+	mu     sync.Mutex
+	target *app
+	// closed is set once the window is gone, so a tick or a post that fires
+	// as it closes draws nothing.
+	closed bool
 }
 
 // newFrame opens a window that shows h.
@@ -124,10 +133,13 @@ func (m *mayoi) newFrame(h *desktop) *frame {
 		opts.X, opts.Y = opts.X+28, opts.Y+28
 	}
 	win := mygo.NewWindow(opts)
+	f.mu.Lock()
 	f.win = win
+	f.mu.Unlock()
 	m.frames = append(m.frames, f)
 	f.add(h)
 	f.active = h
+	f.setTarget()
 
 	// Closing the window saves the files that save themselves, and with
 	// other unsaved changes asks about each first.
@@ -174,10 +186,7 @@ func (m *mayoi) newFrame(h *desktop) *frame {
 	// to open again, as do those the quitting closes. The others keep
 	// their folders' sessions.
 	win.OnClosed(func() {
-		if f.railTimer != nil {
-			f.railTimer.Stop()
-			f.railTimer = nil
-		}
+		f.stop()
 		m.frames = slices.DeleteFunc(m.frames, func(o *frame) bool { return o == f })
 		// A window whose projects moved to another has none left here.
 		for _, h := range f.tabs {
@@ -206,21 +215,34 @@ func (m *mayoi) newFrame(h *desktop) *frame {
 // brings the question shown to the front.
 func (f *frame) beforeClose() bool {
 	m := f.m
+	f.mu.Lock()
+	closing := f.life == lifeClosing
+	f.mu.Unlock()
 	switch {
-	case f.life == lifeClosing || m.life == lifeClosing:
+	case closing || m.life == lifeClosing:
 		return true
 	case m.settling():
 		m.frontAsking()
 		return false
 	case !slices.ContainsFunc(f.tabs, func(d *desktop) bool { return d.a.anyDirty() }):
+		f.mu.Lock()
 		f.life = lifeClosing
+		f.mu.Unlock()
 		return true
 	}
+	f.mu.Lock()
 	f.life = lifeSettling
+	f.mu.Unlock()
 	m.settle(slices.Clone(f.tabs), false, func() {
+		f.mu.Lock()
 		f.life = lifeClosing
+		f.mu.Unlock()
 		f.win.Close()
-	}, func() { f.life = lifeOpen })
+	}, func() {
+		f.mu.Lock()
+		f.life = lifeOpen
+		f.mu.Unlock()
+	})
 	return false
 }
 
@@ -279,6 +301,7 @@ func (f *frame) add(h *desktop) {
 		h.a.setServices(f.services)
 	}
 	f.keepRail()
+	f.setTarget()
 }
 
 // keepRail keeps the order of the rail in the settings.
@@ -308,6 +331,7 @@ func (f *frame) activate(h *desktop) {
 		}
 	}
 	f.active = h
+	f.setTarget()
 	// Its square counts its changes anew, as a switch shows it.
 	h.changesAt, h.changesBusy = time.Time{}, false
 	a := h.a
@@ -348,38 +372,82 @@ func (m *mayoi) front(h *desktop) {
 	m.s.Focused(h.a.window)
 }
 
+// setTarget tells the posts off the main thread where to go: the project
+// shown, or else the first of the rail, which runs them as it draws. The
+// main thread calls it as active or tabs change, since a goroutine cannot
+// read those.
+func (f *frame) setTarget() {
+	var a *app
+	if f.active != nil {
+		a = f.active.a
+	} else if len(f.tabs) > 0 {
+		a = f.tabs[0].a
+	}
+	f.mu.Lock()
+	f.target = a
+	f.mu.Unlock()
+}
+
 // post runs fn on the window's active app loop, falling back to the first
 // tab so background work for inactive tabs still completes.
 func (f *frame) post(fn func()) {
-	if f.active != nil {
-		f.active.a.post(fn)
-		return
-	}
-	if len(f.tabs) > 0 {
-		f.tabs[0].a.post(fn)
+	f.mu.Lock()
+	a := f.target
+	f.mu.Unlock()
+	if a != nil {
+		a.post(fn)
 	}
 }
 
 // invalidate requests a redraw on the window's active app.
 func (f *frame) invalidate() {
-	if f.active != nil {
-		f.active.a.invalidate()
-	} else if f.win != nil {
-		f.win.Invalidate()
+	f.mu.Lock()
+	a, win, closed := f.target, f.win, f.closed
+	f.mu.Unlock()
+	switch {
+	case a != nil:
+		a.invalidate()
+	case !closed && win != nil:
+		// A tester's window, which has no projects to draw for it.
+		win.Invalidate()
 	}
 }
 
 // scheduleRailTick arranges a single window-wide redraw after
 // railChangesEvery so Git counts refresh without spawning a timer per project.
 func (f *frame) scheduleRailTick() {
-	if f.railWake || f.life != lifeOpen {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.railWake || f.closed || f.life != lifeOpen {
 		return
 	}
 	f.railWake = true
-	f.railTimer = time.AfterFunc(railChangesEvery, func() {
-		f.post(func() { f.railWake = false })
+	f.railTimer = time.AfterFunc(railChangesEvery, f.railTick)
+}
+
+// railTick draws the window once its refresh tick comes, unless it closed
+// meanwhile. The timer's goroutine runs it, so it reads the frame under mu.
+func (f *frame) railTick() {
+	f.mu.Lock()
+	f.railWake, f.railTimer = false, nil
+	closed := f.closed
+	f.mu.Unlock()
+	if !closed {
 		f.invalidate()
-	})
+	}
+}
+
+// stop ends the window's posts and its refresh tick as the window closes,
+// so one that fires meanwhile draws nothing.
+func (f *frame) stop() {
+	f.mu.Lock()
+	f.life, f.closed, f.target = lifeClosing, true, nil
+	timer := f.railTimer
+	f.railWake, f.railTimer = false, nil
+	f.mu.Unlock()
+	if timer != nil {
+		timer.Stop()
+	}
 }
 
 // stepProject shows the project by steps along the rail, around its ends.
@@ -555,6 +623,7 @@ func (m *mayoi) dropProject(h *desktop) {
 		f.active = nil
 		f.activate(f.tabs[min(i, len(f.tabs)-1)])
 	}
+	f.setTarget()
 	f.keepRail()
 	f.win.Invalidate()
 }
@@ -579,10 +648,13 @@ func (m *mayoi) projectTabsChanged() {
 			if from.active == h {
 				from.active = nil
 			}
+			from.setTarget()
 			h.a.park()
 			into.add(h)
 			if len(from.tabs) == 0 {
+				from.mu.Lock()
 				from.life = lifeClosing
+				from.mu.Unlock()
 				from.win.Close()
 			}
 		}
@@ -924,6 +996,7 @@ func (f *frame) move(h, before *desktop) {
 	}
 	f.tabs = slices.Insert(f.tabs, at, h)
 	f.keepRail()
+	f.setTarget()
 	if f.win != nil {
 		f.win.Invalidate()
 	}

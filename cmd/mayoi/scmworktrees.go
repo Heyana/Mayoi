@@ -552,25 +552,51 @@ func worktreeFileDir(t *scmWorktree, path string) string {
 	return ""
 }
 
-// sameWorktreePath reports whether two spellings name the same worktree.
+// sameWorktreePath reports whether two spellings name the same worktree: the
+// same folder spelled through a link is one worktree, as /var and /private/var
+// name the same folders on macOS, where a worktree made under one is listed
+// under the other.
 func sameWorktreePath(a, b string) bool {
 	if a == b {
 		return true
 	}
+	ra, rb := worktreeRealPath(a), worktreeRealPath(b)
 	if runtime.GOOS == "windows" {
-		return strings.EqualFold(filepath.Clean(a), filepath.Clean(b))
+		return strings.EqualFold(ra, rb)
 	}
-	return filepath.Clean(a) == filepath.Clean(b)
+	return ra == rb
+}
+
+// worktreeRealPath is the folder a worktree root names, with the links on the
+// way resolved, so that two spellings of it compare equal. A root over a
+// connection names a folder on the host, which is not resolved here, and one
+// that cannot be resolved, as a worktree whose folder is gone, is cleaned as
+// it is.
+func worktreeRealPath(root string) string {
+	if root == "" {
+		return ""
+	}
+	if remote.Is(root) {
+		return filepath.Clean(root)
+	}
+	clean := filepath.Clean(root)
+	if real, err := filepath.EvalSymlinks(clean); err == nil {
+		return real
+	}
+	return clean
 }
 
 // worktreeMapKey names a worktree in the maps the window keeps of those it
-// does not list: its root as Git spells it, folded on Windows, where the
-// same folder is spelled in either case.
+// does not list: its root with the links on the way resolved, as
+// sameWorktreePath reads it, folded on Windows, where the same folder is
+// spelled in either case. A worktree keeps one key however its folder is
+// spelled, so a diff of it finds what was read of it.
 func worktreeMapKey(root string) string {
+	key := worktreeRealPath(root)
 	if runtime.GOOS == "windows" {
-		return strings.ToLower(filepath.Clean(root))
+		return strings.ToLower(key)
 	}
-	return filepath.Clean(root)
+	return key
 }
 
 // worktreeGit is how a diff of a worktree the window does not list reads

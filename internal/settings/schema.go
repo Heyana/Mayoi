@@ -113,6 +113,7 @@ var Schema = []Field{
 	{Key: "aiModel", Category: CatGit, Kind: KindText, Folder: true},
 	{Key: "aiSecretFiles", Category: CatGit, Kind: KindList},
 	{Key: "scmRepositoryOpen", Category: CatGit, Kind: KindBool, Memory: true},
+	{Key: "scmWorktreesOpen", Category: CatGit, Kind: KindBool, Memory: true},
 	{Key: "scmRemotes", Category: CatGit, Kind: KindBool, Memory: true},
 
 	{Key: "vim", Category: CatVim, Kind: KindBool, Folder: true},

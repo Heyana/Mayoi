@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -46,6 +47,7 @@ func railFixture(t testing.TB, dirs ...string) (*frame, []*desktop, *ui.Tester) 
 		hs = append(hs, h)
 	}
 	f.active = hs[0]
+	f.setTarget()
 	m.wins = slices.Clone(hs)
 	tt := ui.NewTester(f.view, 1200, 760)
 	step(tt)
@@ -2040,5 +2042,51 @@ func TestCloseTwiceAsksOnce(t *testing.T) {
 	step(tt)
 	if f.life != lifeOpen || f.m.life != lifeOpen {
 		t.Errorf("after Cancel the window is %v, the app %v", f.life, f.m.life)
+	}
+}
+
+// Posts and the rail's refresh tick run while the window switches its
+// projects, reorders the rail, and closes, without a race: the goroutines
+// a timer and background work run on read the frame under its mutex.
+func TestRailPostsRaceWithSwitchingAndClosing(t *testing.T) {
+	root, other := workspaceFixture(t), workspaceFixture(t)
+	f, tabs, tt := railFixture(t, root, other)
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-done:
+					return
+				default:
+				}
+				f.post(func() {})
+				f.invalidate()
+				f.scheduleRailTick()
+				f.railTick()
+				// Slow enough that the main thread changes the window
+				// between one round and the next.
+				time.Sleep(time.Millisecond)
+			}
+		}()
+	}
+	for i := range 50 {
+		f.activate(tabs[i%2])
+		f.move(tabs[i%2], tabs[(i+1)%2])
+		step(tt)
+	}
+	// The window closes as the goroutines may still run, and what is left
+	// posted draws nothing.
+	f.stop()
+	close(done)
+	wg.Wait()
+	f.mu.Lock()
+	closed, target := f.closed, f.target
+	f.mu.Unlock()
+	if !closed || target != nil {
+		t.Errorf("after stop the window is closed=%v, posts go to %v", closed, target)
 	}
 }
