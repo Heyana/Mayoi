@@ -67,8 +67,14 @@ func (a *gitContext) openWorktreePicker() {
 		branch = st.Branch
 	}
 	bg.Go(func() {
-		trees, err := r.Worktrees()
-		head := r.Head()
+		defer recoverCrash()
+		var trees []git.Worktree
+		var err error
+		var head string
+		readGit(func() {
+			trees, err = r.Worktrees()
+			head = r.Head()
+		})
 		a.app.post(func() {
 			if !w.open || w.repoRoot != r.Root || a.git.repo != r {
 				return
@@ -115,12 +121,15 @@ func (a *gitContext) readWorktreeChanges(trees []git.Worktree) {
 		}
 		path := t.Path
 		bg.Go(func() {
+			defer recoverCrash()
 			n := -1
-			if r, err := git.Open(path); err == nil {
-				if c, err := r.Changed(); err == nil {
-					n = c
+			readGit(func() {
+				if r, err := git.Open(path); err == nil {
+					if c, err := r.Changed(); err == nil {
+						n = c
+					}
 				}
-			}
+			})
 			a.app.post(func() {
 				if !w.open || w.repoRoot != root {
 					return
@@ -413,7 +422,9 @@ func (a *gitContext) worktreeRow(c *ui.Context, ch worktreeChoice, i int) {
 			}
 			ui.Text(c, strings.Join(parts, " • ")).FontSize(12).TextColor(p.faint).SingleLine()
 		})
-		if n, ok := w.changes[t.Path]; ok && !t.Prunable {
+		// One that could not be read says nothing, rather than that it is
+		// clean: its files are unknown, not unchanged.
+		if n, ok := w.changes[t.Path]; ok && n >= 0 && !t.Prunable {
 			label, col := locales.WorktreeClean(), p.faint
 			if n > 0 {
 				label, col = locales.WorktreeFilesChanged(strconv.Itoa(n)), p.modified

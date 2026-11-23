@@ -96,6 +96,11 @@ type gitState struct {
 	historyN       int
 	historyGen     int
 	loadingHistory bool
+	// loadingHistoryStat is set while the lines of the commits are read,
+	// which one such read runs at a time: historyStatPending has them read
+	// again after it, as the history moves while it runs.
+	loadingHistoryStat bool
+	historyStatPending bool
 	// graph is the lanes of history, laid out for the read graphOf
 	// counts.
 	graph   []graphRow
@@ -315,6 +320,10 @@ func (a *gitContext) refreshGit() {
 	// The worktrees are read again when one is made or removed, which the
 	// folder Git lists them in tells by its time.
 	worktreesOf, worktreesAny := g.worktreesOf, g.worktreesAny
+	// The lines of the changed files are counted again once the status
+	// changes: a file that changed keeps its letter while it is edited,
+	// so the count is kept as long as its files and their letters are.
+	prevSt, prevStat := g.status, g.workStat
 	bg.Go(func() {
 		defer recoverCrash()
 		var st *git.Status
@@ -333,8 +342,13 @@ func (a *gitContext) refreshGit() {
 		readGit(func() {
 			st, err = r.Status()
 			if err == nil && len(st.Entries) > 0 {
-				// A clean work tree has no lines to count.
-				workStat, _ = r.WorkNumstat()
+				// A clean work tree has no lines to count, nor one whose
+				// files are those counted last.
+				if prevSt == nil || prevStat == nil || !st.Equal(prevSt) {
+					workStat, _ = r.WorkNumstat()
+				} else {
+					workStat = prevStat
+				}
 			}
 			refs, _ = r.Refs()
 			// The stash is listed only while its ref is there.
@@ -444,40 +458,98 @@ func (a *gitContext) refreshHistory() {
 			// A history with no commit has no lines, nor one whose lines
 			// could not be read.
 			g.historyStat = git.FileStat{}
+			a.pruneCommitReads()
+			// The commits show at once; the lines they changed are counted
+			// after, as reading them takes longer than the log that names
+			// them.
+			if len(cs) > 0 {
+				a.startHistoryStat(key)
+			}
 		})
-		// The commits show at once; the lines they changed are counted after,
-		// as reading them takes longer than the log that names them.
-		if err != nil || len(cs) == 0 {
-			return
-		}
+	})
+}
+
+// startHistoryStat reads the lines the commits of the history changed, one
+// read at a time: a history read again while one runs has its lines read
+// once more after that one, as the log of the commits has shown.
+func (a *gitContext) startHistoryStat(key string) {
+	g := a.git
+	r := g.repo
+	if r == nil {
+		return
+	}
+	n, all := max(g.historyN, historyPage), a.app.settings.ScmAllBranches
+	if g.loadingHistoryStat {
+		g.historyStatPending = true
+		return
+	}
+	g.loadingHistoryStat = true
+	bg.Go(func() {
+		defer recoverCrash()
 		var stats map[string]git.CommitStat
-		var statErr error
-		readGit(func() { stats, statErr = r.HistoryStat(n, all) })
+		var err error
+		readGit(func() { stats, err = r.HistoryStat(n, all) })
 		a.app.post(func() {
-			if g.repo != r || g.historyOf != key || statErr != nil {
-				return
+			g.loadingHistoryStat = false
+			if g.repo == r && !g.historyStatPending && g.historyOf == key && err == nil {
+				var st git.FileStat
+				for _, one := range stats {
+					st.Added += one.Added
+					st.Deleted += one.Deleted
+				}
+				g.historyStat = st
+				// The lines of a commit of the history are known now: the card
+				// that shows it need not read them again.
+				if a.scm != nil {
+					if a.scm.commitStats == nil {
+						a.scm.commitStats = map[string]*commitStatRead{}
+					}
+					for h, one := range stats {
+						if _, ok := a.scm.commitStats[h]; !ok {
+							a.scm.commitStats[h] = &commitStatRead{stat: one}
+						}
+					}
+				}
 			}
-			var st git.FileStat
-			for _, one := range stats {
-				st.Added += one.Added
-				st.Deleted += one.Deleted
-			}
-			g.historyStat = st
-			// The lines of a commit of the history are known now: the card
-			// that shows it need not read them again.
-			if a.scm == nil {
-				return
-			}
-			if a.scm.commitStats == nil {
-				a.scm.commitStats = map[string]*commitStatRead{}
-			}
-			for h, one := range stats {
-				if _, ok := a.scm.commitStats[h]; !ok {
-					a.scm.commitStats[h] = &commitStatRead{stat: one}
+			// The history moved while its lines were read: they are read
+			// again, of the history it moved to.
+			if g.repo == r && g.historyStatPending {
+				g.historyStatPending = false
+				if g.historyOf != "" {
+					a.startHistoryStat(g.historyOf)
 				}
 			}
 		})
 	})
+}
+
+// pruneCommitReads lets go of what was read of the commits the history no
+// longer lists, as it is read again: a history of every commit read would
+// keep its lines and files to the end of the window.
+func (a *gitContext) pruneCommitReads() {
+	s := a.scm
+	if s == nil {
+		return
+	}
+	keep := make(map[string]bool, len(a.git.history)+len(s.openCommits))
+	for _, c := range a.git.history {
+		keep[c.Hash] = true
+	}
+	// The files of a commit show under its row while it is open, though the
+	// history may have moved past it.
+	for h := range s.openCommits {
+		keep[h] = true
+	}
+	for h := range s.commitStats {
+		if !keep[h] {
+			delete(s.commitStats, h)
+		}
+	}
+	for h := range s.commitFiles {
+		if !keep[h] {
+			delete(s.commitFiles, h)
+		}
+	}
 }
 
 // tookGitMeta takes when the files HEAD moving changes last changed, and

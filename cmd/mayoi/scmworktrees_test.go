@@ -46,6 +46,9 @@ func settleScmWorktrees(t *testing.T, hs *harness, ctx *gitContext) {
 func scmWorktreeFixture(t *testing.T) (*harness, func(args ...string) string, string) {
 	t.Helper()
 	hs := newHarness(t, true)
+	// The section reads the worktrees again of its own only while the
+	// window shows, as a window on screen does.
+	hs.h.visible = true
 	run := hs.gitRepo()
 	side := filepath.Join(t.TempDir(), "side")
 	run("worktree", "add", "-b", "side", side)
@@ -718,6 +721,7 @@ func TestScmWorktreesDiffTabNamesTheWorktree(t *testing.T) {
 // worktree may be open for a repository the window does not lead with.
 func TestScmWorktreesRefreshesEveryRepository(t *testing.T) {
 	hs := newHarness(t, true)
+	hs.h.visible = true
 	// The folder opened is no work tree itself: the repositories are those
 	// under it, and the section shows the first of them.
 	one, two := filepath.Join(hs.root, "one"), filepath.Join(hs.root, "two")
@@ -790,5 +794,124 @@ func TestScmWorktreesRefreshesEveryRepository(t *testing.T) {
 		if time.Now().After(deadline) {
 			t.Fatalf("the diff of the worktree lists %d files, want 2", len(vd.files))
 		}
+	}
+}
+
+// A window in the background reads nothing of the worktrees of the section:
+// its files are not watched anyway, and it reads them again as it comes
+// back in front.
+func TestScmWorktreesPausedOffScreen(t *testing.T) {
+	// The host says the window is not on screen.
+	hs := newHarness(t, true)
+	run := hs.gitRepo()
+	side := filepath.Join(t.TempDir(), "side")
+	run("worktree", "add", "-b", "side", side)
+	if err := os.WriteFile(filepath.Join(side, "side.go"), []byte("package side\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hs.a.run("view.scm")
+	hs.settleGit()
+	ctx := openScmWorktrees(t, hs)
+	w := &ctx.scm.worktrees
+	read := w.read
+	if err := os.WriteFile(filepath.Join(side, "later.go"), []byte("package side\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hs.tt.Advance(worktreeStatusEvery + time.Second)
+	hs.settle()
+	if !w.read.Equal(read) {
+		t.Fatal("a window off screen read the worktrees again")
+	}
+	// In front again, it reads them, and the count tells what changed.
+	hs.h.visible = true
+	hs.tt.Advance(worktreeStatusEvery + time.Second)
+	settleScmWorktrees(t, hs, ctx)
+	if tr := w.treeAt(side); tr == nil || tr.fileCount != 2 {
+		t.Fatalf("the worktree counts %+v once in front, want 2 files", tr)
+	}
+}
+
+// A read of a worktree that finds the changes the section already shows is
+// kept as it is: no row is made again.
+func TestScmWorktreeReadOfTheSameChangesMakesNoRow(t *testing.T) {
+	hs, _, side := scmWorktreeFixture(t)
+	if err := os.WriteFile(filepath.Join(side, "side.go"), []byte("package side\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := openScmWorktrees(t, hs)
+	w := &ctx.scm.worktrees
+	tr := w.treeAt(side)
+	if tr == nil || tr.status == nil {
+		t.Fatalf("the worktree was not read: %+v", tr)
+	}
+	gen := w.gen
+	tr.loaded = false
+	ctx.startScmWorktreeRead(tr)
+	deadline := time.Now().Add(settleTimeout)
+	for tr.reading && time.Now().Before(deadline) {
+		hs.settle()
+	}
+	if tr.reading {
+		t.Fatal("the worktree was never read again")
+	}
+	if w.gen != gen {
+		t.Fatalf("a read of the same changes made %d rows, want none", w.gen-gen)
+	}
+}
+
+// Listing the worktrees of one repository keeps the diff of a worktree of
+// another the window lists: it is that section's to read, not this one's to
+// drop.
+func TestScmWorktreesKeepTheDiffOfAnotherRepository(t *testing.T) {
+	hs := newHarness(t, true)
+	one, two := filepath.Join(hs.root, "one"), filepath.Join(hs.root, "two")
+	for _, dir := range []string{one, two} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		gitIn(t, dir, "init", "-q", "-b", "main")
+		if err := os.WriteFile(filepath.Join(dir, "repo.go"), []byte("package repo\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		gitIn(t, dir, "add", ".")
+		gitIn(t, dir, "commit", "-q", "-m", "first")
+	}
+	side := filepath.Join(t.TempDir(), "side")
+	gitIn(t, two, "worktree", "add", "-b", "side", side)
+	hs.a.openFolder(hs.root)
+	hs.settleGit()
+	deadline := time.Now().Add(settleTimeout)
+	var first *gitContext
+	for first == nil {
+		hs.settle()
+		for _, c := range hs.a.repositories.contexts {
+			if c.git.repo != nil && sameWorktreePath(c.git.repo.Root, one) {
+				first = c
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the repositories of the folder were never found")
+		}
+	}
+	r, err := git.Open(side)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hs.a.rememberWorktreeGit(side, r, nil, nil)
+	// The first repository lists its worktrees again.
+	w := &scmWorktrees{closed: map[string]bool{}}
+	first.listScmWorktrees(w, []git.Worktree{{Path: one}}, false)
+	if _, ok := hs.a.outsideGit[worktreeMapKey(side)]; !ok {
+		t.Fatal("listing one repository dropped the diff of another's worktree")
+	}
+	// A worktree no repository of the window lists any more goes.
+	gone := filepath.Join(t.TempDir(), "gone")
+	hs.a.outsideGit[worktreeMapKey(gone)] = &gitContext{app: hs.a, git: &gitState{}}
+	first.listScmWorktrees(w, []git.Worktree{{Path: one}}, false)
+	if _, ok := hs.a.outsideGit[worktreeMapKey(gone)]; ok {
+		t.Fatal("the diff of a worktree gone was kept")
+	}
+	if _, ok := hs.a.outsideGit[worktreeMapKey(side)]; !ok {
+		t.Fatal("listing one repository dropped the diff of another's worktree again")
 	}
 }

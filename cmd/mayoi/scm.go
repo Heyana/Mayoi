@@ -2435,12 +2435,6 @@ func (a *gitContext) scmCountsW() float32 {
 	return w
 }
 
-// scmShapeW is the least width of the worktree and branch buttons, their
-// counts with them.
-func (a *gitContext) scmShapeW() float32 {
-	return scmWorktreeMinW + scmBranchMinW + a.scmCountsW()
-}
-
 // scmCount is how many there are, beside the name of a button: the
 // branches of the repository, or its worktrees.
 func scmCount(c *ui.Context, p *palette, n int) {
@@ -2461,22 +2455,38 @@ func (a *gitContext) scmBranchRow(c *ui.Context) {
 	row := ui.Row(c).Height(30).Padding(0, 8, 0, 8).Gap(2).AlignItems(ui.Center)
 	width := row.Bounds().W
 	row.Children(func() {
-		a.scmWorktreeButton(c, false)
-		a.scmBranchButton(c, false)
-		// The badge shows its number alone when the whole badge would leave no
-		// room beside the worktree and branch buttons at their least width: a
-		// long name shrinks to make room for it, so it does not decide.
-		short := false
+		// The counts of the worktree and branch buttons give way to the
+		// pull request badge, which a narrow row shows whole.
+		counts, short := true, false
 		if pr := a.currentPR(); pr != nil {
 			full, _ := c.MeasureText(0, ui.Span{Text: prBadgeLabel(pr), Size: 11.5})
 			full += 2*6 + 2
 			if pr.Checks != git.ChecksNone {
 				full += 12 + 5
 			}
-			short = width-2*8-a.scmShapeW()-2*2 < full
+			number, _ := c.MeasureText(0, ui.Span{Text: "#" + fmt.Sprint(pr.Number), Size: 11.5})
+			shortW := number + 2*6
+			least := float32(scmWorktreeMinW + scmBranchMinW + 2*2)
+			room := width - 2*8 - least
+			counts = room >= shortW+a.scmCountsW()
+			if counts {
+				short = room-a.scmCountsW() < full
+			} else {
+				short = room < full
+			}
 		}
+		// A row too narrow for the remote buttons leaves its counts out too.
+		counts = counts && width >= scmRemoteRowW
+		a.scmWorktreeButton(c, false, counts)
+		a.scmBranchButton(c, false, counts)
+		// The badge shows its number alone when the whole badge would leave no
+		// room beside the worktree and branch buttons at their least width: a
+		// long name shrinks to make room for it, so it does not decide.
 		// The badge takes the room of its own, as last frame measured it.
 		need := a.remoteRowNeed(c)
+		if !counts {
+			need -= a.scmCountsW()
+		}
 		if badge := a.prBadge(c, false, short); badge != nil {
 			need += badge.Bounds().W + 2
 		}
@@ -2508,8 +2518,9 @@ func (a *gitContext) remoteRowNeed(c *ui.Context) float32 {
 	return need
 }
 
-// scmBranchButton also fits in a multi-repository header.
-func (a *gitContext) scmBranchButton(c *ui.Context, compact bool) {
+// scmBranchButton also fits in a multi-repository header. counts says
+// whether the button counts its branches, which a narrow row leaves out.
+func (a *gitContext) scmBranchButton(c *ui.Context, compact, counts bool) {
 	p := a.app.pal
 	branch := a.branch()
 	if branch == "" {
@@ -2529,9 +2540,9 @@ func (a *gitContext) scmBranchButton(c *ui.Context, compact bool) {
 	b.Transition(hoverFade)
 	b.Children(func() {
 		ui.Icon(c, iconBranch).FontSize(13).TextColor(p.muted)
-		ui.Text(c, branch).FontSize(size).FontWeight(500).TextColor(col).SingleLine().Shrink(1)
+		ui.Text(c, branch).FontSize(size).FontWeight(500).TextColor(col).SingleLine().Shrink(1).MinWidth(0)
 		ui.Icon(c, iconChevronDown).FontSize(11).TextColor(p.faint)
-		if n := len(a.git.branches); n > 1 {
+		if n := len(a.git.branches); n > 1 && counts {
 			scmCount(c, p, n)
 		}
 	})
@@ -2543,8 +2554,10 @@ func (a *gitContext) scmBranchButton(c *ui.Context, compact bool) {
 // scmWorktreeButton is the folder of this repository's work tree, which a click
 // opens the box of the worktrees for. It names a linked worktree's folder, and
 // shows its icon alone otherwise, or when compact. It belongs to this
-// repository, not the selected one, so the box it opens does too.
-func (a *gitContext) scmWorktreeButton(c *ui.Context, compact bool) {
+// repository, not the selected one, so the box it opens does too. counts
+// says whether the button counts its worktrees, which a narrow row leaves
+// out.
+func (a *gitContext) scmWorktreeButton(c *ui.Context, compact, counts bool) {
 	p := a.app.pal
 	name := filepath.Base(a.git.repo.Root)
 	tip := locales.WorktreeStatusTip(name)
@@ -2560,7 +2573,7 @@ func (a *gitContext) scmWorktreeButton(c *ui.Context, compact bool) {
 		if linked && !compact {
 			ui.Text(c, name).FontSize(12.5).FontWeight(500).TextColor(p.text).SingleLine().Shrink(1).MinWidth(0)
 		}
-		if n := len(a.git.worktrees); n > 1 {
+		if n := len(a.git.worktrees); n > 1 && counts {
 			scmCount(c, p, n)
 		}
 	})

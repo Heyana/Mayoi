@@ -231,14 +231,16 @@ func TestWorktreeBoxDoesNotLeak(t *testing.T) {
 	main := mustEval(t, hs.root)
 	for range 5 {
 		openWorktrees(t, hs)
-		if err := hs.tt.Click("side"); err != nil {
-			t.Fatal(err)
-		}
+		// The section behind the box names the worktrees too: choose the box's
+		// row by typing it, as the switching test does.
+		hs.tt.Type("side")
+		hs.settle()
+		hs.tt.Key(0, ui.KeyEnter)
 		hs.settle()
 		openWorktrees(t, hs)
-		if err := hs.tt.Click(filepath.Base(hs.root)); err != nil {
-			t.Fatal(err)
-		}
+		hs.tt.Type(filepath.Base(hs.root))
+		hs.settle()
+		hs.tt.Key(0, ui.KeyEnter)
 		hs.settle()
 	}
 	if a.root != main {

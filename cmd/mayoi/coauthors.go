@@ -86,19 +86,31 @@ func withoutCoAuthorLines(body string) string {
 	return strings.TrimSpace(strings.Join(out, "\n"))
 }
 
-// commitStatRead is how much a commit changed, as it is read.
+// commitStatRead is how much a commit changed, as it is read: at when the
+// read ended, for one that failed to be asked again after a while.
 type commitStatRead struct {
 	stat    git.CommitStat
 	loading bool
 	failed  bool
+	at      time.Time
 }
+
+// commitStatRetry is how long a failed read of a commit's lines stands
+// before the card asks again: a folder read over a connection may fail
+// once and answer the next time.
+const commitStatRetry = 15 * time.Second
 
 // wantCommitStat has how much a commit changed read, in the background,
 // once, and returns it as it is so far.
 func (a *gitContext) wantCommitStat(cm git.Commit) *commitStatRead {
 	s := a.scm
 	if read := s.commitStats[cm.Hash]; read != nil {
-		return read
+		// A read that failed is asked again, rather than shown as failed
+		// for as long as the card is.
+		if !read.failed || time.Since(read.at) < commitStatRetry {
+			return read
+		}
+		delete(s.commitStats, cm.Hash)
 	}
 	read := &commitStatRead{loading: true}
 	r := a.git.repo
@@ -114,7 +126,7 @@ func (a *gitContext) wantCommitStat(cm git.Commit) *commitStatRead {
 		defer recoverCrash()
 		st, err := r.CommitStat(cm)
 		a.app.post(func() {
-			read.loading, read.stat, read.failed = false, st, err != nil
+			read.loading, read.stat, read.failed, read.at = false, st, err != nil, time.Now()
 		})
 	})
 	return read

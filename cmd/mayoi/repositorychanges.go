@@ -339,8 +339,8 @@ func (a *gitContext) repositoryHeader(c *ui.Context) {
 		if selectRepo.Clicked() {
 			clicked = true
 		}
-		a.scmWorktreeButton(c, true)
-		a.scmBranchButton(c, true)
+		a.scmWorktreeButton(c, true, true)
+		a.scmBranchButton(c, true, true)
 		// The menu keeps every remote action available in a narrow sidebar.
 		if width >= 360 {
 			a.scmActions(c)

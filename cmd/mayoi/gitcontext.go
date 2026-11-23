@@ -132,6 +132,9 @@ func (a *app) resetRepositories() {
 	a.repositories = repositoryState{}
 	// The work trees read for the view belong to the folder left behind.
 	a.outsideGit, a.outsideRead = nil, nil
+	// The folders it resolved of its worktrees are of the folder left
+	// behind too.
+	forgetWorktreePaths()
 }
 
 func (a *app) refreshGit() {

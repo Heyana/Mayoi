@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"mayoi/internal/remote"
@@ -1077,19 +1078,31 @@ func (r *Repo) CommitStat(c Commit) (CommitStat, error) {
 // A merge's changes are those against its first parent, counted once; a
 // rename counts as one file, and a binary file's lines as none.
 func (r *Repo) HistoryStat(n int, all bool) (map[string]CommitStat, error) {
-	args := []string{"log", "--date-order", "-n", strconv.Itoa(n), "-M", "-m", "--numstat", "--format=COMMIT %H", "HEAD"}
+	out, err := r.historyNumstat(n, all, "--diff-merges=first-parent")
+	if err != nil {
+		// A Git before 2.31 knows no --diff-merges: -m prints the same
+		// first-parent changes of a merge, which parseHistoryNumstat keeps
+		// once.
+		out, err = r.historyNumstat(n, all, "-m")
+		if err != nil {
+			// Before the first commit HEAD names none: no history, no error.
+			if r.Head() == "" {
+				return nil, nil
+			}
+			return nil, err
+		}
+	}
+	return parseHistoryNumstat(string(out)), nil
+}
+
+// historyNumstat runs the log HistoryStat reads, with merges diffed one
+// way or another.
+func (r *Repo) historyNumstat(n int, all bool, merges string) ([]byte, error) {
+	args := []string{"log", "--date-order", "-n", strconv.Itoa(n), "-M", merges, "--numstat", "--format=COMMIT %H", "HEAD"}
 	if all {
 		args = append(args, "--branches", "--remotes", "--tags")
 	}
-	out, err := r.run(nil, append(args, "--")...)
-	if err != nil {
-		// Before the first commit HEAD names none: no history, no error.
-		if r.Head() == "" {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return parseHistoryNumstat(string(out)), nil
+	return r.run(nil, append(args, "--")...)
 }
 
 // parseHistoryNumstat reads git log's --numstat, "COMMIT <hash>" heading
@@ -1153,7 +1166,8 @@ func (r *Repo) CommitNumstat(c Commit) (map[string]FileStat, error) {
 
 // WorkNumstat returns the lines each changed file of the work tree added
 // and deleted, by its path there: the staged and the unstaged changes
-// against HEAD together, and the files Git does not track yet whole.
+// against HEAD together, and the files Git does not track yet whole. A
+// remote work tree leaves those out, as their folders are not read here.
 func (r *Repo) WorkNumstat() (map[string]FileStat, error) {
 	out, err := r.run(nil, "diff", "--numstat", "-z", "-M", "HEAD", "--")
 	if err != nil {
@@ -1166,20 +1180,81 @@ func (r *Repo) WorkNumstat() (map[string]FileStat, error) {
 		}
 	}
 	stat := r.absNumstat(parseNumstatFiles(out))
+	if vfs.IsRemote(r.Root) {
+		// The folders of a remote work tree are read over the connection,
+		// not here: the files Git does not track yet are left out rather
+		// than read file by file over it.
+		return stat, nil
+	}
 	others, err := r.run(nil, "ls-files", "--others", "--exclude-standard", "-z")
 	if err != nil {
 		// The changes count; those Git does not track yet do not.
 		return stat, nil
 	}
+	read := 0
 	for _, rel := range strings.Split(string(others), "\x00") {
 		if rel == "" {
 			continue
 		}
-		if n := countLines(r.Abs(rel)); n > 0 {
+		if read >= untrackedLinesMost {
+			// A folder with hundreds of them, as build output not ignored,
+			// reads a few rather than each, whole.
+			break
+		}
+		read++
+		if n := untrackedCount(r.Abs(rel)); n > 0 {
 			stat[r.Abs(rel)] = FileStat{Added: n}
 		}
 	}
 	return stat, nil
+}
+
+// untrackedLinesMost is how many files Git does not track yet are read for
+// their lines in one call to WorkNumstat.
+const untrackedLinesMost = 256
+
+// untrackedLine is how many lines a file Git does not track had, read of
+// the size and time it had then.
+type untrackedLine struct {
+	size  int64
+	mtime time.Time
+	lines int
+}
+
+// untrackedLines remembers the files read of late, so that the read every
+// few seconds counts a file read before from what it had rather than
+// reading it whole again.
+var untrackedLines = struct {
+	sync.Mutex
+	of map[string]untrackedLine
+}{}
+
+// untrackedLinesKept is how many files untrackedLines remembers: a work
+// tree changing many of them drops what it knew rather than growing on.
+const untrackedLinesKept = 1024
+
+// untrackedCount counts the lines of a file Git does not track, as
+// countLines does, once the file is as it was read last.
+func untrackedCount(path string) int {
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > 8<<20 {
+		return 0
+	}
+	size, mtime := info.Size(), info.ModTime()
+	untrackedLines.Lock()
+	if one, ok := untrackedLines.of[path]; ok && one.size == size && one.mtime.Equal(mtime) {
+		untrackedLines.Unlock()
+		return one.lines
+	}
+	untrackedLines.Unlock()
+	n := countLines(path)
+	untrackedLines.Lock()
+	if untrackedLines.of == nil || len(untrackedLines.of) >= untrackedLinesKept {
+		untrackedLines.of = make(map[string]untrackedLine, 16)
+	}
+	untrackedLines.of[path] = untrackedLine{size: size, mtime: mtime, lines: n}
+	untrackedLines.Unlock()
+	return n
 }
 
 // absNumstat keys the lines of each file of a work tree by its path there.
@@ -1192,12 +1267,8 @@ func (r *Repo) absNumstat(stat map[string]FileStat) map[string]FileStat {
 }
 
 // countLines counts the lines of a file Git does not track yet, 0 for one
-// it reads as binary, one too big to read, or one it cannot.
+// it reads as binary or one it cannot.
 func countLines(path string) int {
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() > 8<<20 {
-		return 0
-	}
 	b, err := os.ReadFile(path)
 	if err != nil || bytes.IndexByte(b, 0) >= 0 {
 		return 0

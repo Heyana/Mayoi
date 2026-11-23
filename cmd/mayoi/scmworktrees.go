@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -97,8 +99,9 @@ type worktreeRead struct {
 
 // readWorktree opens a worktree and reads its status, its lines, and the
 // counts of its files, within the reads the work trees here run at once
-// together (#149).
-func readWorktree(wt git.Worktree) worktreeRead {
+// together (#149). Its lines are counted again only when its status
+// changed.
+func readWorktree(wt git.Worktree, prev *git.Status, prevStat map[string]git.FileStat) worktreeRead {
 	var out worktreeRead
 	readGit(func() {
 		r, err := git.Open(wt.Path)
@@ -114,8 +117,13 @@ func readWorktree(wt git.Worktree) worktreeRead {
 		}
 		out.st = st
 		if len(st.Entries) > 0 {
-			// A clean work tree has no lines to count.
-			out.stat, _ = r.WorkNumstat()
+			// A clean work tree has no lines to count, nor one whose files
+			// are those counted last.
+			if prev == nil || prevStat == nil || !st.Equal(prev) {
+				out.stat, _ = r.WorkNumstat()
+			} else {
+				out.stat = prevStat
+			}
 		}
 		out.groups = groupStatus(st)
 		out.fileCount = worktreeFileCount(out.groups)
@@ -215,6 +223,9 @@ func (a *gitContext) refreshScmWorktrees() {
 // read of those still listed so that their rows keep their counts until
 // the new read lands, and dropping what was kept of those gone.
 func (a *gitContext) listScmWorktrees(w *scmWorktrees, listed []git.Worktree, offHost bool) {
+	// The folders are resolved again, as one linked elsewhere since, or one
+	// gone, is listed anew.
+	forgetWorktreePaths()
 	prev := w.trees
 	trees := make([]*scmWorktree, 0, len(listed))
 	for _, t := range listed {
@@ -258,14 +269,16 @@ func (a *gitContext) listScmWorktrees(w *scmWorktrees, listed []git.Worktree, of
 	if offHost {
 		return
 	}
-	// The diff of a worktree removed has no status left to read again.
+	// The diff of a worktree gone has no status left to read again; one
+	// another repository of the window lists is kept, as its section read
+	// it, rather than dropped because this one does not list it.
 	for root := range a.app.outsideGit {
-		if worktreeAt(w.trees, root) == nil {
+		if !a.app.knownWorktree(root) {
 			delete(a.app.outsideGit, root)
 		}
 	}
 	for root := range a.app.outsideRead {
-		if worktreeAt(w.trees, root) == nil {
+		if !a.app.knownWorktree(root) {
 			delete(a.app.outsideRead, root)
 		}
 	}
@@ -285,13 +298,24 @@ func (a *gitContext) autoRefreshScmWorktrees() {
 	if !a.app.settings.ScmWorktreesOpen && !a.app.outsideDiffOpen() {
 		return
 	}
+	// A window in the background reads nothing of them: its files are not
+	// watched anyway, and they are read again as it comes back in front.
+	if !a.app.worktreesAwake() {
+		return
+	}
 	now := a.app.gitNow()
 	if now.Sub(w.read) < worktreeStatusEvery {
 		return
 	}
 	w.read = now
+	open := a.app.settings.ScmWorktreesOpen
 	for _, t := range w.trees {
 		if t.wt.Current || !t.local || t.wt.Prunable || t.reading {
+			continue
+		}
+		// A folded section reads again the worktrees a tab shows the
+		// changes of, rather than every worktree of every repository.
+		if !open && !a.app.diffOpenAt(t.wt.Path) {
 			continue
 		}
 		// What was read stays until the new read lands.
@@ -299,6 +323,11 @@ func (a *gitContext) autoRefreshScmWorktrees() {
 		a.startScmWorktreeRead(t)
 	}
 }
+
+// worktreesAwake reports whether the window is in front: one behind another
+// app, hidden or minimized reads nothing of the worktrees, which are read
+// again as it comes back.
+func (a *app) worktreesAwake() bool { return !a.blurred && a.host.shown() }
 
 // startScmWorktreeRead reads the changes of one worktree in the
 // background, as the section lists it or as Retry asks again.
@@ -308,11 +337,11 @@ func (a *gitContext) startScmWorktreeRead(t *scmWorktree) {
 		return
 	}
 	t.reading, t.err = true, ""
-	wt := t.wt
+	wt, prev, prevStat := t.wt, t.status, t.stat
 	repo, request := w.repo, w.request
 	bg.Go(func() {
 		defer recoverCrash()
-		r := readWorktree(wt)
+		r := readWorktree(wt, prev, prevStat)
 		a.app.post(func() {
 			if w.repo != repo || w.request != request {
 				return
@@ -325,6 +354,11 @@ func (a *gitContext) startScmWorktreeRead(t *scmWorktree) {
 			if r.err != nil {
 				tw.err = r.err.Error()
 				w.gen++
+				return
+			}
+			// The same changes as those shown: no row is made again, nor
+			// the context of a diff of the worktree replaced.
+			if tw.status != nil && tw.status.Equal(r.st) && maps.Equal(tw.stat, r.stat) {
 				return
 			}
 			tw.status, tw.stat = r.st, r.stat
@@ -580,10 +614,44 @@ func worktreeRealPath(root string) string {
 		return filepath.Clean(root)
 	}
 	clean := filepath.Clean(root)
-	if real, err := filepath.EvalSymlinks(clean); err == nil {
+	worktreePaths.Lock()
+	real, known := worktreePaths.real[clean]
+	worktreePaths.Unlock()
+	if known {
 		return real
 	}
-	return clean
+	if resolved, err := filepath.EvalSymlinks(clean); err == nil {
+		real = resolved
+	} else {
+		real = clean
+	}
+	worktreePaths.Lock()
+	if worktreePaths.real == nil || len(worktreePaths.real) >= worktreePathsKept {
+		worktreePaths.real = make(map[string]string, 16)
+	}
+	worktreePaths.real[clean] = real
+	worktreePaths.Unlock()
+	return real
+}
+
+// worktreePaths are the folders the worktree lookups resolved, by the path
+// as written: the section compares worktrees every frame, and the links on
+// the way are looked up once rather than at each comparison.
+var worktreePaths = struct {
+	sync.Mutex
+	real map[string]string
+}{}
+
+// worktreePathsKept bounds what is resolved: a window speaks of a few
+// hundred paths at most, and a folder opened anew starts afresh.
+const worktreePathsKept = 2048
+
+// forgetWorktreePaths drops what the worktree lookups resolved, for a
+// window that opens another folder.
+func forgetWorktreePaths() {
+	worktreePaths.Lock()
+	worktreePaths.real = nil
+	worktreePaths.Unlock()
 }
 
 // worktreeMapKey names a worktree in the maps the window keeps of those it
@@ -624,14 +692,18 @@ func (a *app) worktreeGit(root string) *gitContext {
 	a.outsideRead[key] = true
 	bg.Go(func() {
 		defer recoverCrash()
-		r, err := git.Open(root)
+		var r *git.Repo
+		var err error
 		var st *git.Status
 		var stat map[string]git.FileStat
-		if err == nil {
-			if st, err = r.Status(); err == nil {
-				stat, _ = r.WorkNumstat()
+		readGit(func() {
+			r, err = git.Open(root)
+			if err == nil {
+				if st, err = r.Status(); err == nil {
+					stat, _ = r.WorkNumstat()
+				}
 			}
-		}
+		})
 		a.post(func() {
 			delete(a.outsideRead, key)
 			if err != nil || r == nil {
@@ -655,15 +727,35 @@ func (a *app) worktreeGit(root string) *gitContext {
 // rememberWorktreeGit keeps what was read of a worktree beside the
 // window, for a diff of it to read its files.
 func (a *app) rememberWorktreeGit(root string, r *git.Repo, st *git.Status, stat map[string]git.FileStat) {
+	key := worktreeMapKey(root)
+	// What is known of it says the same, as it does every read: kept as it
+	// is, rather than replaced and the window made to draw again.
+	if ctx, ok := a.outsideGit[key]; ok && ctx.git.repo == r && ctx.git.status != nil &&
+		ctx.git.status.Equal(st) && maps.Equal(ctx.git.workStat, stat) {
+		return
+	}
 	if a.outsideGit == nil {
 		a.outsideGit = make(map[string]*gitContext)
 	}
-	a.outsideGit[worktreeMapKey(root)] = &gitContext{
+	a.outsideGit[key] = &gitContext{
 		app: a, identity: r,
 		git: &gitState{repo: r, looked: true, status: st, workStat: stat},
 		scm: &scmState{},
 	}
 	a.invalidate()
+}
+
+// diffOpenAt reports whether a tab shows the changes of the worktree at
+// root, though the section beside it is folded.
+func (a *app) diffOpenAt(root string) bool {
+	for _, col := range a.cols {
+		for _, t := range col.tabs {
+			if t.diff != nil && t.diff.repoRoot != "" && sameWorktreePath(t.diff.repoRoot, root) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // outsideDiffOpen reports whether a tab shows the changes of a worktree
