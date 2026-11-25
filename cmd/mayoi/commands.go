@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -191,6 +192,8 @@ func (a *app) commandsIn(t locales.Messages) []command {
 		{"git.blame", t.CmdGitBlame(), "", a.toggleBlame},
 		{"git.openFileOnRemote", t.CmdGitOpenFileOnRemote(), "", func() { a.activeFileOnRemote(false) }},
 		{"git.copyPermalink", t.CmdGitCopyPermalink(), "", func() { a.activeFileOnRemote(true) }},
+		{"git.init", t.CmdGitInit(), "", a.initRepo},
+		{"git.publishRepo", t.CmdGitPublishRepo(), "", a.askPublishRepo},
 		{"git.fetch", t.CmdGitFetch(), "", a.fetch},
 		{"git.pull", t.CmdGitPull(), "", a.pull},
 		{"git.push", t.CmdGitPush(), "", a.push},
@@ -657,6 +660,10 @@ func (a *app) menu(cli bool, run func(id string, win *mygo.Window)) *mygo.Menu {
 		it.Disabled = !a.repository().git.ghOK
 		return it
 	}
+	initRepoItem := item("git.init")
+	initRepoItem.Disabled = a.root == "" || (a.git.repo != nil && filepath.Clean(a.git.repo.Root) == filepath.Clean(a.root))
+	publishRepoItem := item("git.publishRepo")
+	publishRepoItem.Disabled = a.repository().git.repo == nil || len(a.repository().git.remotes) > 0
 	cut, selectAll := &mygo.MenuItem{Role: mygo.RoleCut}, &mygo.MenuItem{Role: mygo.RoleSelectAll}
 	if a.keyFocus == placeEditor {
 		cut, selectAll = item("edit.cut"), item("edit.selectAll")
@@ -736,6 +743,7 @@ func (a *app) menu(cli bool, run func(id string, win *mygo.Window)) *mygo.Menu {
 			item("git.showChange"), item("git.revertChange"), item("git.appendChange"), item("git.stageChange"), mygo.Separator(),
 			item("git.stageFile"), item("git.unstageFile"), item("git.stageAll"), mygo.Separator(),
 			item("git.switchBranch"), item("git.switchWorktree"), item("git.createBranch"), item("git.fetch"), item("git.pull"), item("git.push"), mygo.Separator(),
+			initRepoItem, publishRepoItem, mygo.Separator(),
 			item("git.stash"), item("git.stashUntracked"), item("git.stashes"), mygo.Separator(),
 			prItem("git.openPullRequest"), prItem("git.showPullRequestChecks"), prItem("git.newIssue"), mygo.Separator(),
 			checkbox("git.blame", a.prefs().Blame), item("git.openFileOnRemote"), item("git.copyPermalink"), item("git.refresh"), mygo.Separator(),

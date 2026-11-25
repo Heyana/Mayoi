@@ -973,6 +973,7 @@ func (a *gitContext) scmClean(c *ui.Context) {
 		case st.Upstream == "" && len(g.remotes) > 0:
 			button(iconPush, locales.ScmPublishBranch(), true, a.push)
 		case st.Upstream == "":
+			button(iconCloud, locales.ScmPublishRepo(), true, a.askPublishRepo)
 		case st.Behind > 0:
 			button(iconPull, locales.ScmPullCommits(st.Behind), true, a.pull)
 			if st.Ahead > 0 {
@@ -1966,6 +1967,12 @@ func (a *gitContext) scmMenu(m *ui.Menu) {
 		}
 		m.Separator()
 	}
+	if len(g.remotes) == 0 {
+		if m.Item(locales.CmdGitPublishRepo()).Disabled(!g.canMutate()).Chosen() {
+			a.app.post(a.askPublishRepo)
+		}
+		m.Separator()
+	}
 	if m.Item(locales.CmdGitFetch()).Disabled(!g.canMutate()).Chosen() {
 		a.app.post(a.fetch)
 	}
@@ -2369,6 +2376,11 @@ func ellipsize(s string, n int) string {
 // initRepo makes the folder a Git repository.
 func (a *app) initRepo() {
 	if a.root == "" {
+		a.fail("%s", locales.NoFolderOpen())
+		return
+	}
+	if a.git.repo != nil && filepath.Clean(a.git.repo.Root) == filepath.Clean(a.root) {
+		a.fail("%s", locales.ScmAlreadyRepo())
 		return
 	}
 	root := a.root
@@ -2382,6 +2394,7 @@ func (a *app) initRepo() {
 			if a.root == root {
 				a.git = gitState{}
 				a.ignoredRead.Invalidate()
+				a.gitChanged()
 			}
 		})
 	})
@@ -2494,7 +2507,7 @@ func (a *gitContext) scmBranchRow(c *ui.Context) {
 		// A narrow row keeps fetch, pull and push in the menu of the view's
 		// title, which has all three; publish stays, as the menu lacks it.
 		st := a.git.status
-		if width >= need || st != nil && st.Branch != "" && st.Upstream == "" {
+		if width >= need || len(a.git.remotes) == 0 || st != nil && st.Branch != "" && st.Upstream == "" {
 			a.scmActions(c)
 		}
 	})
@@ -2590,6 +2603,9 @@ func (a *gitContext) scmActions(c *ui.Context) {
 	st := g.status
 	busy := !g.canMutate()
 	if len(g.remotes) == 0 {
+		if a.app.syncButton(c, "publish-repo", iconCloud, locales.ScmPublishRepo(), 0).Disabled(busy).Clicked() {
+			a.askPublishRepo()
+		}
 		return
 	}
 	if a.app.syncButton(c, "fetch", iconFetch, locales.CmdGitFetch(), 0).Disabled(busy).Clicked() {

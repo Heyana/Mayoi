@@ -835,6 +835,112 @@ func (a *gitContext) push() {
 	})
 }
 
+// askPublishRepo asks for a name and visibility, then creates a GitHub
+// repository for the work tree through gh.
+func (a *gitContext) askPublishRepo() {
+	if !a.live() {
+		return
+	}
+	if a.git.repo == nil {
+		a.app.fail("%s", locales.ScmNoRepo())
+		return
+	}
+	if len(a.git.remotes) > 0 {
+		a.app.fail("%s", locales.ScmHasRemotes())
+		return
+	}
+	if !a.git.canMutate() {
+		return
+	}
+	repo := a.git.repo
+	pr := &prompt{
+		title:     locales.CmdGitPublishRepo(),
+		hint:      locales.ScmPublishRepoHint(),
+		value:     filepath.Base(repo.Root),
+		selectAll: true,
+		choices:   []string{locales.ScmRepoPrivate(), locales.ScmRepoPublic()},
+	}
+	pr.done = func(value string) string {
+		name := strings.TrimSpace(value)
+		if !git.ValidRepoName(name) {
+			return locales.ScmPublishRepoBadName()
+		}
+		if a.git.repo != repo {
+			return ""
+		}
+		a.publishRepo(name, pr.choice == 0)
+		return ""
+	}
+	a.app.prompt = pr
+}
+
+// publishRepo creates a GitHub repository through gh, binds origin, and
+// pushes the current branch when the repository already has a commit.
+func (a *gitContext) publishRepo(name string, private bool) {
+	if !a.live() {
+		return
+	}
+	g := a.git
+	r := g.repo
+	if r == nil {
+		return
+	}
+	if !a.app.online() {
+		a.app.fail("%s", locales.NotConnectedTo(a.app.conn.Host))
+		return
+	}
+	if g.busy != "" {
+		return
+	}
+	push := g.status != nil && g.status.Head != ""
+	g.busy = locales.BusyPublishingRepo()
+	g.pending++
+	bg.Go(func() {
+		repoURL, err := r.PublishRepo(name, private, push)
+		a.app.post(func() {
+			if g.repo != r {
+				return
+			}
+			g.pending--
+			g.busy = ""
+			a.gitChanged()
+			if err != nil {
+				switch git.GitHubProblem(err) {
+				case git.GHMissing:
+					detail := locales.GhMissingDetail()
+					if a.app.conn != nil {
+						detail = locales.GhMissingOn(a.app.conn.Host)
+					}
+					a.app.present(&confirm{
+						title:   locales.GhMissing(),
+						message: detail,
+						ok:      locales.GhGetCLI(),
+						run:     func() { a.app.services.OpenURL(ghGetCLI) },
+					})
+				case git.GHSignedOut:
+					root := r.Root
+					a.app.present(&confirm{
+						title:   locales.GhSignedOut(),
+						message: locales.GhSignedOutDetail(),
+						ok:      locales.GhSignIn(),
+						run:     func() { a.app.runInTerminal(root, "gh auth login") },
+					})
+				default:
+					a.gitFailed(err)
+				}
+				return
+			}
+			g.gh.remotesOf = ""
+			n := note{message: locales.PublishedRepo(name)}
+			if repoURL != "" {
+				u := repoURL
+				n.label, n.action = locales.PrOpenOnGitHub(), func() { a.app.services.OpenURL(u) }
+			}
+			a.app.tell(n)
+		})
+	})
+}
+
 // gitSync pulls and pushes in one background operation, keeping the
 // repository busy until both finish. A branch without an upstream is
 // published by the existing push command.

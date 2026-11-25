@@ -728,6 +728,11 @@ func (a *gitContext) scmPanelMenu(m *ui.Menu, r scmRow, action *func()) {
 			*action = a.askPanelNewBranch
 		}
 	} else if q.kind == "remote" || q.kind == "url" || q.kind == "addRemote" || q.kind == "section" && r.key == "panel:remotes" {
+		if len(a.git.remotes) == 0 {
+			if m.Item(locales.CmdGitPublishRepo()).Disabled(moving).Chosen() {
+				*action = a.askPublishRepo
+			}
+		}
 		if m.Item(locales.PanelAddRemote()).Disabled(moving).Chosen() {
 			*action = func() { a.askPanelRemote(nil, false) }
 		}

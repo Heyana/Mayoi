@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
 	"testing"
 )
 
@@ -213,5 +214,48 @@ func TestWorktreeOfBranch(t *testing.T) {
 	git("worktree", "remove", p)
 	if back, err := r.WorktreeOfBranch("12-crash", "HEAD"); err != nil || back != p {
 		t.Fatalf("back = %q, %v; want %q", back, err, p)
+	}
+}
+
+func TestPublishRepo(t *testing.T) {
+	prev := GH
+	t.Cleanup(func() { GH = prev })
+
+	var gotArgs []string
+	GH = func(args ...string) ([]byte, error) {
+		gotArgs = slices.Clone(args)
+		return []byte("✓ Created repository me/demo on GitHub\n  https://github.com/me/demo\n✓ Added remote git@github.com:me/demo.git\n"), nil
+	}
+
+	r := &Repo{Root: t.TempDir()}
+	u, err := r.PublishRepo("demo", true, true)
+	if err != nil {
+		t.Fatalf("PublishRepo private+push: %v", err)
+	}
+	if u != "https://github.com/me/demo" {
+		t.Fatalf("url = %q, want https://github.com/me/demo", u)
+	}
+	want := []string{"repo", "create", "demo", "--source=.", "--remote=origin", "--private", "--push"}
+	if !slices.Equal(gotArgs, want) {
+		t.Fatalf("args = %q, want %q", gotArgs, want)
+	}
+
+	gotArgs = nil
+	if _, err := r.PublishRepo("org/demo", false, false); err != nil {
+		t.Fatalf("PublishRepo public no-push: %v", err)
+	}
+	want = []string{"repo", "create", "org/demo", "--source=.", "--remote=origin", "--public"}
+	if !slices.Equal(gotArgs, want) {
+		t.Fatalf("args = %q, want %q", gotArgs, want)
+	}
+
+	for _, bad := range []string{"", " ", "--private", "a b", "a/b/c", "/a", "a/", "../x"} {
+		gotArgs = nil
+		if _, err := r.PublishRepo(bad, true, false); err == nil {
+			t.Errorf("PublishRepo(%q) succeeded, want error", bad)
+		}
+		if gotArgs != nil {
+			t.Errorf("PublishRepo(%q) invoked gh with %q", bad, gotArgs)
+		}
 	}
 }

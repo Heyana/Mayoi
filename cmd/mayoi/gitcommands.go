@@ -35,6 +35,7 @@ func (a *app) gitDo(busy string, fn func(r *git.Repo) error, then func()) {
 func (a *app) fetch()                                  { a.repository().fetch() }
 func (a *app) pull()                                   { a.repository().pull() }
 func (a *app) push()                                   { a.repository().push() }
+func (a *app) askPublishRepo()                         { a.repository().askPublishRepo() }
 func (a *app) switchBranch(branch string, create bool) { a.repository().switchBranch(branch, create) }
 func (a *app) checkOutCommit(cm git.Commit)            { a.repository().checkOutCommit(cm) }
 func (a *app) inHead(hash string) bool                 { return a.repository().inHead(hash) }

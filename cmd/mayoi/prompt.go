@@ -20,6 +20,13 @@ type prompt struct {
 	selected    bool
 	// optional lets the value be empty.
 	optional bool
+	// selectAll selects the whole value on open rather than leaving an
+	// extension unselected.
+	selectAll bool
+	// choices, when set, shows a segmented control under the input;
+	// choice is the index selected.
+	choices []string
+	choice  int
 	// cancel runs as the prompt closes without a value, when set.
 	cancel func()
 }
@@ -59,13 +66,19 @@ func (a *app) promptView(c *ui.Context) {
 				})
 				in := a.textKeys(ui.TextInput(c.Key("prompt-"+pr.title), &pr.value)).AutoFocus().FontSize(13).Label(pr.title)
 				if !pr.selected {
-					// Select the name without its extension, as Finder does.
+					// Select the name without its extension, as Finder does,
+					// unless selectAll asks for the whole value.
 					pr.selected = true
 					n := len([]rune(pr.value))
-					if ext := filepath.Ext(pr.value); ext != "" && ext != pr.value {
-						n -= len([]rune(ext))
+					if !pr.selectAll {
+						if ext := filepath.Ext(pr.value); ext != "" && ext != pr.value {
+							n -= len([]rune(ext))
+						}
 					}
 					in.SetTextSelection(0, n)
+				}
+				if len(pr.choices) > 0 {
+					ui.Segmented(c.Key("prompt-choice"), &pr.choice, pr.choices...)
 				}
 				if pr.err != "" {
 					in.Error(pr.err)

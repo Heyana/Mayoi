@@ -1536,6 +1536,16 @@ func (msgs Messages) BusyPullingBranch(name string) string {
 	return Catalog.Format(msgs.locale, "busyPullingBranch", map[string]any{"name": name})
 }
 
+// BusyPublishingRepo says "Publishing repository…"
+// in the language the app shows.
+func BusyPublishingRepo() string { return In(i18n.Locale()).BusyPublishingRepo() }
+
+// BusyPublishingRepo says "Publishing repository…"
+// in the language of msgs.
+func (msgs Messages) BusyPublishingRepo() string {
+	return Catalog.Format(msgs.locale, "busyPublishingRepo", nil)
+}
+
 // BusyPushing says "Pushing…"
 // in the language the app shows.
 func BusyPushing() string { return In(i18n.Locale()).BusyPushing() }
@@ -2636,6 +2646,26 @@ func CmdGitPull() string { return In(i18n.Locale()).CmdGitPull() }
 // in the language of msgs.
 func (msgs Messages) CmdGitPull() string {
 	return Catalog.Format(msgs.locale, "cmdGitPull", nil)
+}
+
+// CmdGitInit says "Initialize Repository"
+// in the language the app shows.
+func CmdGitInit() string { return In(i18n.Locale()).CmdGitInit() }
+
+// CmdGitInit says "Initialize Repository"
+// in the language of msgs.
+func (msgs Messages) CmdGitInit() string {
+	return Catalog.Format(msgs.locale, "cmdGitInit", nil)
+}
+
+// CmdGitPublishRepo says "Publish Repository…"
+// in the language the app shows.
+func CmdGitPublishRepo() string { return In(i18n.Locale()).CmdGitPublishRepo() }
+
+// CmdGitPublishRepo says "Publish Repository…"
+// in the language of msgs.
+func (msgs Messages) CmdGitPublishRepo() string {
+	return Catalog.Format(msgs.locale, "cmdGitPublishRepo", nil)
 }
 
 // CmdGitPush says "Push"
@@ -8932,6 +8962,16 @@ func (msgs Messages) Published(branch string) string {
 	return Catalog.Format(msgs.locale, "published", map[string]any{"branch": branch})
 }
 
+// PublishedRepo says "Published {name}"
+// in the language the app shows.
+func PublishedRepo(name string) string { return In(i18n.Locale()).PublishedRepo(name) }
+
+// PublishedRepo says "Published {name}"
+// in the language of msgs.
+func (msgs Messages) PublishedRepo(name string) string {
+	return Catalog.Format(msgs.locale, "publishedRepo", map[string]any{"name": name})
+}
+
 // PulledCommits says "{count, plural, one {Pulled # commit} other {Pulled # commits}}"
 // in the language the app shows.
 func PulledCommits(count int) string { return In(i18n.Locale()).PulledCommits(count) }
@@ -11148,6 +11188,26 @@ func (msgs Messages) ScmOpenStaged() string {
 	return Catalog.Format(msgs.locale, "scmOpenStaged", nil)
 }
 
+// ScmAlreadyRepo says "This folder is already a Git repository."
+// in the language the app shows.
+func ScmAlreadyRepo() string { return In(i18n.Locale()).ScmAlreadyRepo() }
+
+// ScmAlreadyRepo says "This folder is already a Git repository."
+// in the language of msgs.
+func (msgs Messages) ScmAlreadyRepo() string {
+	return Catalog.Format(msgs.locale, "scmAlreadyRepo", nil)
+}
+
+// ScmHasRemotes says "This repository already has a remote."
+// in the language the app shows.
+func ScmHasRemotes() string { return In(i18n.Locale()).ScmHasRemotes() }
+
+// ScmHasRemotes says "This repository already has a remote."
+// in the language of msgs.
+func (msgs Messages) ScmHasRemotes() string {
+	return Catalog.Format(msgs.locale, "scmHasRemotes", nil)
+}
+
 // ScmPublishBranch says "Publish Branch"
 // in the language the app shows.
 func ScmPublishBranch() string { return In(i18n.Locale()).ScmPublishBranch() }
@@ -11156,6 +11216,56 @@ func ScmPublishBranch() string { return In(i18n.Locale()).ScmPublishBranch() }
 // in the language of msgs.
 func (msgs Messages) ScmPublishBranch() string {
 	return Catalog.Format(msgs.locale, "scmPublishBranch", nil)
+}
+
+// ScmPublishRepo says "Publish Repository"
+// in the language the app shows.
+func ScmPublishRepo() string { return In(i18n.Locale()).ScmPublishRepo() }
+
+// ScmPublishRepo says "Publish Repository"
+// in the language of msgs.
+func (msgs Messages) ScmPublishRepo() string {
+	return Catalog.Format(msgs.locale, "scmPublishRepo", nil)
+}
+
+// ScmPublishRepoBadName says "Enter a valid repository name"
+// in the language the app shows.
+func ScmPublishRepoBadName() string { return In(i18n.Locale()).ScmPublishRepoBadName() }
+
+// ScmPublishRepoBadName says "Enter a valid repository name"
+// in the language of msgs.
+func (msgs Messages) ScmPublishRepoBadName() string {
+	return Catalog.Format(msgs.locale, "scmPublishRepoBadName", nil)
+}
+
+// ScmPublishRepoHint says "Repository name on GitHub"
+// in the language the app shows.
+func ScmPublishRepoHint() string { return In(i18n.Locale()).ScmPublishRepoHint() }
+
+// ScmPublishRepoHint says "Repository name on GitHub"
+// in the language of msgs.
+func (msgs Messages) ScmPublishRepoHint() string {
+	return Catalog.Format(msgs.locale, "scmPublishRepoHint", nil)
+}
+
+// ScmRepoPrivate says "Private"
+// in the language the app shows.
+func ScmRepoPrivate() string { return In(i18n.Locale()).ScmRepoPrivate() }
+
+// ScmRepoPrivate says "Private"
+// in the language of msgs.
+func (msgs Messages) ScmRepoPrivate() string {
+	return Catalog.Format(msgs.locale, "scmRepoPrivate", nil)
+}
+
+// ScmRepoPublic says "Public"
+// in the language the app shows.
+func ScmRepoPublic() string { return In(i18n.Locale()).ScmRepoPublic() }
+
+// ScmRepoPublic says "Public"
+// in the language of msgs.
+func (msgs Messages) ScmRepoPublic() string {
+	return Catalog.Format(msgs.locale, "scmRepoPublic", nil)
 }
 
 // ScmPullCommits says "{count, plural, one {Pull # Commit} other {Pull # Commits}}"

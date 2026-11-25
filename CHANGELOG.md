@@ -5,6 +5,9 @@ needs a `## <version>` section here, or its build fails.
 
 ## Unreleased
 
+- Added **Git › Initialize Repository** and **Git › Publish Repository…** to initialize a folder or create and push a GitHub repository in one step.
+- Source Control shows **Publish Repository** in the branch bar, clean state, and menus when a repository has no remotes.
+
 - **All Worktree Changes** in Source Control lists the other worktrees, with the lines and files each changed.
 - It leaves out the worktree whose changes are above it, and hides when there is no other.
 - It follows worktrees made or removed while folded.

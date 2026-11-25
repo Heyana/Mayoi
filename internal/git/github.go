@@ -830,3 +830,54 @@ func (r *Repo) FetchDefaultBranch(repoURL, branch string) (string, error) {
 	}
 	return "refs/remotes/" + name + "/" + branch, nil
 }
+
+// PublishRepo creates a repository on GitHub through gh, points origin at
+// it, and pushes the current branch when push is set. It returns the URL
+// gh printed for the new repository, if any.
+func (r *Repo) PublishRepo(name string, private, push bool) (string, error) {
+	name = strings.TrimSpace(name)
+	if !ValidRepoName(name) {
+		return "", fmt.Errorf("invalid repository name %q", name)
+	}
+	vis := "--public"
+	if private {
+		vis = "--private"
+	}
+	args := []string{"repo", "create", name, "--source=.", "--remote=origin", vis}
+	if push {
+		args = append(args, "--push")
+	}
+	out, err := r.gh(args...)
+	if err != nil {
+		return "", err
+	}
+	return publishedRepoURL(string(out)), nil
+}
+
+// ValidRepoName reports whether name is a safe repository name or
+// owner/name to pass to gh repo create.
+func ValidRepoName(name string) bool {
+	if name == "" || strings.HasPrefix(name, "-") || strings.Contains(name, "..") {
+		return false
+	}
+	if strings.Count(name, "/") > 1 || strings.HasPrefix(name, "/") || strings.HasSuffix(name, "/") {
+		return false
+	}
+	for _, c := range name {
+		if c <= ' ' || c == '\\' || c == ':' {
+			return false
+		}
+	}
+	return true
+}
+
+// publishedRepoURL reads the repository URL from what gh repo create printed.
+func publishedRepoURL(out string) string {
+	for _, line := range strings.Split(out, "\n") {
+		s := strings.TrimSpace(line)
+		if strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://") {
+			return s
+		}
+	}
+	return ""
+}
