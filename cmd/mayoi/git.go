@@ -280,7 +280,7 @@ func (a *gitContext) refreshGit() {
 	if local {
 		every = metaEvery
 	}
-	if !g.metaRead.Running() && now.Sub(g.checked) >= every {
+	if !a.app.blurred && !g.metaRead.Running() && now.Sub(g.checked) >= every {
 		g.metaRead.Invalidate()
 	}
 	if r := g.repo; g.metaRead.Start(r) {
@@ -305,7 +305,7 @@ func (a *gitContext) refreshGit() {
 		})
 	}
 	a.refreshHistory()
-	if !g.statusRead.Running() && now.Sub(g.read) >= statusEvery {
+	if !a.app.blurred && !g.statusRead.Running() && now.Sub(g.read) >= statusEvery {
 		g.statusRead.Invalidate()
 	}
 	r := g.repo

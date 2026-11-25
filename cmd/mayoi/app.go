@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -348,8 +349,10 @@ type app struct {
 	mascot      mascotState // the theme's character, Claude's or Qoder's
 	toldAt      time.Time   // when a toast last told what a command did
 	spin        spinState   // Claude's spinner, while Git works
-	// blurred is set while the window has not the keyboard.
+	// blurred is set while the window has not the keyboard; blurAtom mirrors
+	// it for off-main poller wake callbacks.
 	blurred  bool
+	blurAtom atomic.Bool
 	colsView ui.Handle // the columns, whose width their weights share
 	// frame counts the frames, and frameAt is when the last started: a
 	// frame may build the view several times.
@@ -1043,8 +1046,27 @@ func (a *app) windowTitle() string {
 	return strings.Join(parts, " — ")
 }
 
+// setBlurred records whether the window has lost keyboard focus.
+func (a *app) setBlurred(b bool) {
+	a.blurred = b
+	a.blurAtom.Store(b)
+}
+
+// awake reports whether the window is shown and focused, so periodic
+// background polling should run.
+func (a *app) awake() bool { return !a.blurred && a.host.shown() }
+
+// wakePoll invalidates the window for a periodic poller only while the
+// window is focused; a blurred window catches up on focus.
+func (a *app) wakePoll() {
+	if !a.blurAtom.Load() {
+		a.invalidate()
+	}
+}
+
 // tick runs once a frame, after the posted functions.
 func (a *app) tick() {
+	a.blurAtom.Store(a.blurred)
 	if a.tree != nil {
 		a.tree.SetIdle(a.blurred)
 	}

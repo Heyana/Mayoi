@@ -224,7 +224,7 @@ func (a *app) showGitHub() {
 func (a *gitContext) refreshGitHub() {
 	g := a.git
 	a.refreshGitHubRemotes()
-	if !a.live() || !a.onGitHub() || !a.app.online() || !a.app.host.shown() {
+	if !a.live() || !a.onGitHub() || !a.app.online() || !a.app.awake() {
 		return
 	}
 	r := g.repo
@@ -267,7 +267,7 @@ func (a *gitContext) refreshGitHub() {
 				}
 				g.gh.overviewOf, g.gh.problem, g.gh.err = r, git.GitHubProblem(err), ghMessage(err)
 			}
-			g.gh.poll.Keep(key, a.ghEvery(), a.app.invalidate)
+			g.gh.poll.Keep(key, a.ghEvery(), a.app.wakePoll)
 		})
 	})
 }

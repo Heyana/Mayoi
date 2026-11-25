@@ -32,7 +32,7 @@ const (
 // and many none.
 func (a *gitContext) refreshCommitChecks() {
 	g := a.git
-	if !a.live() || len(g.history) == 0 && len(g.checksWanted) == 0 || !a.app.online() || !a.app.host.shown() {
+	if !a.live() || len(g.history) == 0 && len(g.checksWanted) == 0 || !a.app.online() || !a.app.awake() {
 		return
 	}
 	r := g.repo
@@ -47,7 +47,7 @@ func (a *gitContext) refreshCommitChecks() {
 	hashes := a.commitChecksDue(time.Now())
 	if len(hashes) == 0 {
 		g.commitChecksPoll.Done(key)
-		g.commitChecksPoll.Keep(key, a.commitChecksEvery(), a.app.invalidate)
+		g.commitChecksPoll.Keep(key, a.commitChecksEvery(), a.app.wakePoll)
 		return
 	}
 	bg.Go(func() {
@@ -83,7 +83,7 @@ func (a *gitContext) refreshCommitChecks() {
 				g.commitChecksOff = true
 				clear(g.checksWanted)
 			}
-			g.commitChecksPoll.Keep(key, a.commitChecksEvery(), a.app.invalidate)
+			g.commitChecksPoll.Keep(key, a.commitChecksEvery(), a.app.wakePoll)
 		})
 	})
 }

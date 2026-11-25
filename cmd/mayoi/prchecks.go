@@ -119,7 +119,7 @@ func (a *gitContext) readChecks() {
 			default:
 				pick.err = err.Error()
 			}
-			pick.poll.Keep(key, checksEvery, a.app.invalidate)
+			pick.poll.Keep(key, checksEvery, a.app.wakePoll)
 		})
 	})
 }

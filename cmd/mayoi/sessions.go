@@ -168,6 +168,9 @@ func (a *app) agentEnv() *agents.Env {
 // readSessions reads the sessions again, in the background, once they
 // are due, and what runs in herdr-core while the terminal backend is hc.
 func (a *app) readSessions() {
+	if a.blurred {
+		return
+	}
 	st := &a.sessions
 	if st.read.Start("", sessionsEvery) {
 		e := a.agentEnv()
@@ -180,7 +183,7 @@ func (a *app) readSessions() {
 				st.sessions, st.loaded = ss, true
 				st.version++
 				a.placeLive(time.Now())
-				st.read.Keep("", sessionsEvery, a.invalidate)
+				st.read.Keep("", sessionsEvery, a.wakePoll)
 				if st.readAgain {
 					st.readAgain = false
 					st.read.Expire()
@@ -188,22 +191,24 @@ func (a *app) readSessions() {
 			})
 		})
 	}
+	if !a.hcBackend() {
+		if st.hcRunning != nil || st.hcLoose != nil {
+			st.hcRunning, st.hcLoose = nil, nil
+			a.placeLive(time.Now())
+		}
+		return
+	}
 	if st.live.Start("", sessionsLiveEvery) {
-		hc := a.hcBackend()
 		roots := a.agentEnv().ClaudeRoots()
 		bg.Go(func() {
-			var running map[string]hcAgent
-			var loose []hcAgent
-			if hc {
-				running, loose = hcAgents(roots)
-			}
+			running, loose := hcAgents(roots)
 			a.post(func() {
 				if !st.live.Done("") {
 					return
 				}
 				st.hcRunning, st.hcLoose, st.liveSeen = running, loose, true
 				a.placeLive(time.Now())
-				st.live.Keep("", sessionsLiveEvery, a.invalidate)
+				st.live.Keep("", sessionsLiveEvery, a.wakePoll)
 			})
 		})
 	}

@@ -28,7 +28,7 @@ const (
 func (a *gitContext) refreshPR() {
 	g := a.git
 	st := g.status
-	if a.live() && st != nil && st.Branch == "" && !g.ghProbed && a.app.online() && a.app.host.shown() {
+	if a.live() && st != nil && st.Branch == "" && !g.ghProbed && a.app.online() && a.app.awake() {
 		// Detached, there is no pull request to ask for: only whether gh
 		// answers, for the pull requests' commands.
 		g.ghProbed = true
@@ -43,7 +43,7 @@ func (a *gitContext) refreshPR() {
 			})
 		})
 	}
-	if !a.live() || st == nil || st.Branch == "" || !a.app.online() || !a.app.host.shown() {
+	if !a.live() || st == nil || st.Branch == "" || !a.app.online() || !a.app.awake() {
 		return
 	}
 	r, branch := g.repo, st.Branch
@@ -73,7 +73,7 @@ func (a *gitContext) refreshPR() {
 			default:
 				g.pr, g.prOff, g.ghOK = nil, true, false
 			}
-			g.prPoll.Keep(key, a.prEvery(), a.app.invalidate)
+			g.prPoll.Keep(key, a.prEvery(), a.app.wakePoll)
 		})
 	})
 }
@@ -84,7 +84,7 @@ func (a *gitContext) refreshPR() {
 // shows the project. The history never waits for it.
 func (a *gitContext) refreshPRHeads() {
 	g := a.git
-	if !a.live() || len(g.history) == 0 || !a.app.online() || !a.app.host.shown() {
+	if !a.live() || len(g.history) == 0 || !a.app.online() || !a.app.awake() {
 		return
 	}
 	if a.githubOverview() != nil {
@@ -117,7 +117,7 @@ func (a *gitContext) refreshPRHeads() {
 			default:
 				g.prHeads, g.prHeadsOff = nil, true
 			}
-			g.prHeadsPoll.Keep(key, a.prHeadsEvery(), a.app.invalidate)
+			g.prHeadsPoll.Keep(key, a.prHeadsEvery(), a.app.wakePoll)
 		})
 	})
 }

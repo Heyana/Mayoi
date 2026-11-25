@@ -327,7 +327,7 @@ func (a *gitContext) autoRefreshScmWorktrees() {
 // worktreesAwake reports whether the window is in front: one behind another
 // app, hidden or minimized reads nothing of the worktrees, which are read
 // again as it comes back.
-func (a *app) worktreesAwake() bool { return !a.blurred && a.host.shown() }
+func (a *app) worktreesAwake() bool { return a.awake() }
 
 // startScmWorktreeRead reads the changes of one worktree in the
 // background, as the section lists it or as Retry asks again.

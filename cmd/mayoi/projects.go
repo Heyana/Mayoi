@@ -159,7 +159,7 @@ func (m *mayoi) newFrame(h *desktop) *frame {
 		}
 		m.front(h)
 		a := h.a
-		a.post(func() { a.blurred = false })
+		a.post(func() { a.setBlurred(false) })
 		a.post(a.gitChanged)
 		a.post(a.wake)
 		// The rail read nothing while the window was behind: it does once
@@ -171,7 +171,7 @@ func (m *mayoi) newFrame(h *desktop) *frame {
 	win.OnBlur(func() {
 		if h := f.active; h != nil {
 			a := h.a
-			a.post(func() { a.blurred = true })
+			a.post(func() { a.setBlurred(true) })
 			a.post(a.autoSaveAll)
 		}
 	})
@@ -350,7 +350,7 @@ func (f *frame) activate(h *desktop) {
 	}
 	if old := f.active; old != nil {
 		old.a.autoSaveAll()
-		old.a.blurred = true
+		old.a.setBlurred(true)
 		// Its frames stop: its tree learns it is idle from here.
 		if old.a.tree != nil {
 			old.a.tree.SetIdle(true)
@@ -361,7 +361,7 @@ func (f *frame) activate(h *desktop) {
 	// Its square counts its changes anew, as a switch shows it.
 	h.changesAt, h.changesBusy = time.Time{}, false
 	a := h.a
-	a.blurred = false
+	a.setBlurred(false)
 	// Its files may have changed meanwhile, and the keyboard goes back to
 	// its column.
 	a.post(a.gitChanged)
@@ -1157,6 +1157,10 @@ func hasRepository(dir string) bool {
 // every second for a square no one looks at.
 const railChangesEvery = 10 * time.Second
 
+// railNoRepoEvery is how often a folder that was not in a Git repository
+// is checked again, so non-repo folders do not spawn git every 10 seconds.
+const railNoRepoEvery = time.Minute
+
 // railRowH is a project's row: its name, and under it the lines of its
 // work and when it last moved.
 const railRowH float32 = 44
@@ -1306,8 +1310,8 @@ func (f *frame) railChanges(h *desktop) int {
 		return h.changes
 	}
 	// A folder no repository held when last read is not asked again within
-	// the interval, which finds one made there since.
-	if h.repoDir == dir && !h.hasRepo && time.Since(h.repoAt) < railChangesEvery {
+	// railNoRepoEvery, unless a Git command ran here since (such as Init).
+	if h.repoDir == dir && !h.hasRepo && !h.a.railOpAt.After(h.repoAt) && time.Since(h.repoAt) < railNoRepoEvery {
 		return 0
 	}
 	// Git did something here since the read: the counts are stale at once,
@@ -1321,6 +1325,28 @@ func (f *frame) railChanges(h *desktop) int {
 	// remote, which only the window in front does, and only when the
 	// preference asks for it.
 	due := f.m.s.RailFetch && time.Since(h.fetchedAt) >= railFetchEvery
+	// Reuse the active project's live Git status when it is fresher than any
+	// background fetch, instead of spawning a duplicate git status/diff every
+	// rail tick.
+	if h == f.active && !due && h.a.git.repo != nil && h.a.git.status != nil && !h.activityAt.IsZero() &&
+		!h.a.git.read.IsZero() && !h.fetchedAt.After(h.a.git.read) {
+		st := h.a.git.status
+		h.changes, h.ahead, h.behind = len(st.Entries), st.Ahead, st.Behind
+		h.hasRepo, h.repoDir, h.repoAt = true, dir, time.Now()
+		h.changesAt = time.Now()
+		if len(st.Entries) == 0 {
+			h.added, h.deleted, h.linesAt = 0, 0, h.changesAt
+		} else if h.a.git.workStat != nil {
+			added, deleted := 0, 0
+			for _, fs := range h.a.git.workStat {
+				added += fs.Added
+				deleted += fs.Deleted
+			}
+			h.added, h.deleted, h.linesAt = added, deleted, h.changesAt
+		}
+		f.scheduleRailTick()
+		return h.changes
+	}
 	// The lines a work tree gained and lost cost a diff of every change,
 	// so they are read less often than the status.
 	dueLines := time.Since(h.linesAt) >= railLinesEvery || h.a.railOpAt.After(h.linesAt)
@@ -1330,11 +1356,16 @@ func (f *frame) railChanges(h *desktop) int {
 	// to it only once it does: the window's active app runs it here instead,
 	// so a row shows without a switch to its tab.
 	bg.Go(func() {
+		var r *git.Repo
 		var st *git.Status
 		var added, deleted int
 		var act, linesAt time.Time
-		r, err := git.Open(dir)
-		if err == nil {
+		readGit(func() {
+			var err error
+			r, err = git.Open(dir)
+			if err != nil {
+				return
+			}
 			// The branch's status says both what the work tree changed
 			// and how far its branch is from its upstream.
 			st, _ = r.Status()
@@ -1359,7 +1390,7 @@ func (f *frame) railChanges(h *desktop) int {
 					}
 				}
 			}
-		}
+		})
 		h.post(func() {
 			if h.changesGen != gen {
 				return
@@ -1395,6 +1426,7 @@ func (f *frame) railChanges(h *desktop) int {
 						// The fetch heard of the commits: read them again,
 						// at once.
 						h.changesAt = time.Time{}
+						h.a.git.statusRead.Invalidate()
 						h.invalidate()
 					})
 				})
