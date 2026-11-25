@@ -20223,3 +20223,233 @@ func PrefOptDiffFilesOne() string { return In(i18n.Locale()).PrefOptDiffFilesOne
 func (msgs Messages) PrefOptDiffFilesOne() string {
 	return Catalog.Format(msgs.locale, "prefOptDiffFilesOne", nil)
 }
+
+// CmdViewProjectInfo says "Project Info…"
+// in the language the app shows.
+func CmdViewProjectInfo() string { return In(i18n.Locale()).CmdViewProjectInfo() }
+
+// CmdViewProjectInfo says "Project Info…"
+// in the language of msgs.
+func (msgs Messages) CmdViewProjectInfo() string {
+	return Catalog.Format(msgs.locale, "cmdViewProjectInfo", nil)
+}
+
+// RailProjectInfo says "Project Info…"
+// in the language the app shows.
+func RailProjectInfo() string { return In(i18n.Locale()).RailProjectInfo() }
+
+// RailProjectInfo says "Project Info…"
+// in the language of msgs.
+func (msgs Messages) RailProjectInfo() string {
+	return Catalog.Format(msgs.locale, "railProjectInfo", nil)
+}
+
+// ProjectInfoTitle says "Project Info"
+// in the language the app shows.
+func ProjectInfoTitle() string { return In(i18n.Locale()).ProjectInfoTitle() }
+
+// ProjectInfoTitle says "Project Info"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoTitle() string {
+	return Catalog.Format(msgs.locale, "projectInfoTitle", nil)
+}
+
+// ProjectInfoReading says "Reading the files…"
+// in the language the app shows.
+func ProjectInfoReading() string { return In(i18n.Locale()).ProjectInfoReading() }
+
+// ProjectInfoReading says "Reading the files…"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoReading() string {
+	return Catalog.Format(msgs.locale, "projectInfoReading", nil)
+}
+
+// ProjectInfoFailed says "Could not read this project: {error}"
+// in the language the app shows.
+func ProjectInfoFailed(error string) string { return In(i18n.Locale()).ProjectInfoFailed(error) }
+
+// ProjectInfoFailed says "Could not read this project: {error}"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoFailed(error string) string {
+	return Catalog.Format(msgs.locale, "projectInfoFailed", map[string]any{"error": error})
+}
+
+// ProjectInfoLines says "Lines"
+// in the language the app shows.
+func ProjectInfoLines() string { return In(i18n.Locale()).ProjectInfoLines() }
+
+// ProjectInfoLines says "Lines"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoLines() string {
+	return Catalog.Format(msgs.locale, "projectInfoLines", nil)
+}
+
+// ProjectInfoFiles says "Files"
+// in the language the app shows.
+func ProjectInfoFiles() string { return In(i18n.Locale()).ProjectInfoFiles() }
+
+// ProjectInfoFiles says "Files"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoFiles() string {
+	return Catalog.Format(msgs.locale, "projectInfoFiles", nil)
+}
+
+// ProjectInfoSize says "Size"
+// in the language the app shows.
+func ProjectInfoSize() string { return In(i18n.Locale()).ProjectInfoSize() }
+
+// ProjectInfoSize says "Size"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoSize() string {
+	return Catalog.Format(msgs.locale, "projectInfoSize", nil)
+}
+
+// ProjectInfoCommits says "Commits"
+// in the language the app shows.
+func ProjectInfoCommits() string { return In(i18n.Locale()).ProjectInfoCommits() }
+
+// ProjectInfoCommits says "Commits"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoCommits() string {
+	return Catalog.Format(msgs.locale, "projectInfoCommits", nil)
+}
+
+// ProjectInfoLanguages says "Languages"
+// in the language the app shows.
+func ProjectInfoLanguages() string { return In(i18n.Locale()).ProjectInfoLanguages() }
+
+// ProjectInfoLanguages says "Languages"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoLanguages() string {
+	return Catalog.Format(msgs.locale, "projectInfoLanguages", nil)
+}
+
+// ProjectInfoRepository says "Repository"
+// in the language the app shows.
+func ProjectInfoRepository() string { return In(i18n.Locale()).ProjectInfoRepository() }
+
+// ProjectInfoRepository says "Repository"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoRepository() string {
+	return Catalog.Format(msgs.locale, "projectInfoRepository", nil)
+}
+
+// ProjectInfoBranch says "Branch"
+// in the language the app shows.
+func ProjectInfoBranch() string { return In(i18n.Locale()).ProjectInfoBranch() }
+
+// ProjectInfoBranch says "Branch"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoBranch() string {
+	return Catalog.Format(msgs.locale, "projectInfoBranch", nil)
+}
+
+// ProjectInfoRemote says "Remote"
+// in the language the app shows.
+func ProjectInfoRemote() string { return In(i18n.Locale()).ProjectInfoRemote() }
+
+// ProjectInfoRemote says "Remote"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoRemote() string {
+	return Catalog.Format(msgs.locale, "projectInfoRemote", nil)
+}
+
+// ProjectInfoBranches says "Branches"
+// in the language the app shows.
+func ProjectInfoBranches() string { return In(i18n.Locale()).ProjectInfoBranches() }
+
+// ProjectInfoBranches says "Branches"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoBranches() string {
+	return Catalog.Format(msgs.locale, "projectInfoBranches", nil)
+}
+
+// ProjectInfoContributors says "Contributors"
+// in the language the app shows.
+func ProjectInfoContributors() string { return In(i18n.Locale()).ProjectInfoContributors() }
+
+// ProjectInfoContributors says "Contributors"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoContributors() string {
+	return Catalog.Format(msgs.locale, "projectInfoContributors", nil)
+}
+
+// ProjectInfoFirstCommit says "First commit"
+// in the language the app shows.
+func ProjectInfoFirstCommit() string { return In(i18n.Locale()).ProjectInfoFirstCommit() }
+
+// ProjectInfoFirstCommit says "First commit"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoFirstCommit() string {
+	return Catalog.Format(msgs.locale, "projectInfoFirstCommit", nil)
+}
+
+// ProjectInfoLastCommit says "Last commit"
+// in the language the app shows.
+func ProjectInfoLastCommit() string { return In(i18n.Locale()).ProjectInfoLastCommit() }
+
+// ProjectInfoLastCommit says "Last commit"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoLastCommit() string {
+	return Catalog.Format(msgs.locale, "projectInfoLastCommit", nil)
+}
+
+// ProjectInfoWorkingTree says "Working tree"
+// in the language the app shows.
+func ProjectInfoWorkingTree() string { return In(i18n.Locale()).ProjectInfoWorkingTree() }
+
+// ProjectInfoWorkingTree says "Working tree"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoWorkingTree() string {
+	return Catalog.Format(msgs.locale, "projectInfoWorkingTree", nil)
+}
+
+// ProjectInfoClean says "Clean"
+// in the language the app shows.
+func ProjectInfoClean() string { return In(i18n.Locale()).ProjectInfoClean() }
+
+// ProjectInfoClean says "Clean"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoClean() string {
+	return Catalog.Format(msgs.locale, "projectInfoClean", nil)
+}
+
+// ProjectInfoChanged says "{count, plural, one {# changed file} other {# changed files}}"
+// in the language the app shows.
+func ProjectInfoChanged(count int) string { return In(i18n.Locale()).ProjectInfoChanged(count) }
+
+// ProjectInfoChanged says "{count, plural, one {# changed file} other {# changed files}}"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoChanged(count int) string {
+	return Catalog.Format(msgs.locale, "projectInfoChanged", map[string]any{"count": count})
+}
+
+// ProjectInfoRefresh says "Read again"
+// in the language the app shows.
+func ProjectInfoRefresh() string { return In(i18n.Locale()).ProjectInfoRefresh() }
+
+// ProjectInfoRefresh says "Read again"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoRefresh() string {
+	return Catalog.Format(msgs.locale, "projectInfoRefresh", nil)
+}
+
+// ProjectInfoCopyPath says "Copy path"
+// in the language the app shows.
+func ProjectInfoCopyPath() string { return In(i18n.Locale()).ProjectInfoCopyPath() }
+
+// ProjectInfoCopyPath says "Copy path"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoCopyPath() string {
+	return Catalog.Format(msgs.locale, "projectInfoCopyPath", nil)
+}
+
+// ProjectInfoCopied says "Copied the path"
+// in the language the app shows.
+func ProjectInfoCopied() string { return In(i18n.Locale()).ProjectInfoCopied() }
+
+// ProjectInfoCopied says "Copied the path"
+// in the language of msgs.
+func (msgs Messages) ProjectInfoCopied() string {
+	return Catalog.Format(msgs.locale, "projectInfoCopied", nil)
+}

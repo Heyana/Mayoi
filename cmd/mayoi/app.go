@@ -171,6 +171,9 @@ type app struct {
 	// stats is the panel of recent commits of the window's projects, nil
 	// in a window that shows one.
 	stats *statsState
+	// projectInfo is the dialog of the project's files and lines, and what
+	// its Git repository holds.
+	projectInfo projectInfoState
 
 	pal *palette
 	// fade is the window's way from one palette to another, as the

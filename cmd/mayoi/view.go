@@ -197,6 +197,7 @@ func (a *app) view(c *ui.Context) {
 	a.confirmView(c)
 	a.signinView(c)
 	a.statsView(c)
+	a.projectInfoView(c)
 	a.windowKeys(c)
 	if inEditor := a.keyFocus == placeEditor; inEditor != a.cutInEditor {
 		a.cutInEditor = inEditor

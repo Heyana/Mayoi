@@ -1687,6 +1687,9 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 		if mn.Item(locales.CopyPath()).Disabled(dir == "").Chosen() {
 			a.services.WriteClipboard(hostPath(dir))
 		}
+		if mn.Item(locales.RailProjectInfo()).Disabled(dir == "" || remote.Is(dir)).Chosen() {
+			a.post(func() { a.openProjectInfo(dir, name) })
+		}
 		mn.Separator()
 		if mn.Item(locales.RailRename()).Disabled(dir == "").Chosen() {
 			a.post(func() { f.askRailLabel(a, dir, name) })

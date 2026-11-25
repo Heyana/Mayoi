@@ -29,6 +29,8 @@ needs a `## <version>` section here, or its build fails.
 - Source Control file rows and group headers show working-tree `+/−` line counts.
 - Branch and worktree buttons show counts when there is more than one, and worktrees show uncommitted counts.
 - Removing the last linked worktree clears the worktree count badge in Source Control.
+- The project rail's **Project Info** shows a project's lines, files, size and languages.
+- **Project Info** lists the branch, remote, commits and contributors of a Git repository.
 - Wrapped diff lines now wrap wide characters inside the pane instead of clipping on the right.
 - Wrapped diff lines keep emoji, flags and combining marks whole where they break.
 - Diffs at small editor sizes no longer draw larger than the editor's text.
