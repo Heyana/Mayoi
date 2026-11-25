@@ -2178,3 +2178,99 @@ func TestHasRepositoryFindsTheOneAbove(t *testing.T) {
 		t.Error("a remote folder is in one here")
 	}
 }
+
+// Closing the active project via closeProject drains the drop before building
+// the frame and never panics when shown, focused, or setTitle are called on a
+// dropped project.
+func TestCloseActiveProjectDoesNotCrash(t *testing.T) {
+	root, other := workspaceFixture(t), workspaceFixture(t)
+	f, tabs, tt := railFixture(t, root, other)
+	closed := tabs[0]
+	buildsBefore := closed.a.builds
+	closed.closeProject()
+	step(tt)
+	if f.active != tabs[1] || len(f.tabs) != 1 {
+		t.Fatalf("after closeProject: active=%v tabs=%d, want %v and 1", f.active, len(f.tabs), tabs[1])
+	}
+	if closed.f != nil {
+		t.Fatalf("closed project still holds frame %v", closed.f)
+	}
+	if closed.a.builds != buildsBefore {
+		t.Errorf("closed project built %d more frame(s) after drop", closed.a.builds-buildsBefore)
+	}
+	if closed.shown() || closed.focused() {
+		t.Error("dropped project reports shown or focused")
+	}
+	closed.setTitle("ignored")
+}
+
+// Dragging or opening an already-open folder (even with a trailing slash or
+// through a symlink) focuses the existing project rather than duplicating it.
+func TestOpenFolderDeduplicates(t *testing.T) {
+	root, other := workspaceFixture(t), workspaceFixture(t)
+	f, tabs, _ := railFixture(t, root, other)
+	m := f.m
+	f.activate(tabs[1])
+
+	// Trailing slash.
+	tabs[1].openFolders([]string{root + string(filepath.Separator), root})
+	if len(f.tabs) != 2 || len(m.wins) != 2 {
+		t.Fatalf("trailing slash duplicated project: %d tabs, %d wins", len(f.tabs), len(m.wins))
+	}
+	if f.active != tabs[0] {
+		t.Errorf("opening existing folder did not focus it: active=%v", f.active)
+	}
+
+	// Symlink to the same folder.
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(other, link); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	tabs[0].openFolders([]string{link})
+	if len(f.tabs) != 2 || len(m.wins) != 2 {
+		t.Fatalf("symlink duplicated project: %d tabs, %d wins", len(f.tabs), len(m.wins))
+	}
+	if f.active != tabs[1] {
+		t.Errorf("opening symlink to existing folder did not focus it: active=%v", f.active)
+	}
+}
+
+// Opening a non-independent subfolder (no .git) of an already-open Git
+// repository focuses that repository instead of opening a duplicate tab,
+// while nested independent repos (with .git) and sibling monorepo folders
+// when the root is not open still open on their own.
+func TestOpenFolderDeduplicatesRepoSubfolders(t *testing.T) {
+	repo := workspaceFixture(t)
+	gitAt(t, repo, time.Time{}, "init", "-q", "-b", "main")
+	subA := filepath.Join(repo, "sub-a")
+	subB := filepath.Join(repo, "sub-b")
+	nested := filepath.Join(repo, "nested-repo")
+	for _, d := range []string{subA, subB, nested} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitAt(t, nested, time.Time{}, "init", "-q", "-b", "main")
+
+	// When repo root is open, dragging sub-a focuses repo instead of duplicating.
+	other := workspaceFixture(t)
+	f, tabs, _ := railFixture(t, repo, other)
+	f.activate(tabs[1])
+	tabs[1].openFolders([]string{subA})
+	if len(f.tabs) != 2 || f.active != tabs[0] {
+		t.Fatalf("subfolder of open repo: tabs=%d active=%v, want 2 and repo", len(f.tabs), f.active)
+	}
+
+	// A nested independent repo (with its own .git) still opens separately.
+	tabs[0].openFolders([]string{nested})
+	if len(f.tabs) != 3 {
+		t.Fatalf("nested repo with own .git did not open: tabs=%d", len(f.tabs))
+	}
+
+	// When repo root is NOT open, sibling monorepo subfolders can both open.
+	f2, tabs2, _ := railFixture(t, subA, other)
+	tabs2[0].openFolders([]string{subB})
+	if len(f2.tabs) != 3 {
+		t.Fatalf("sibling monorepo subfolder did not open when root closed: tabs=%d", len(f2.tabs))
+	}
+}

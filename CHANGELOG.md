@@ -5,6 +5,8 @@ needs a `## <version>` section here, or its build fails.
 
 ## Unreleased
 
+- Fixed a crash when closing an active project tab.
+- Dragging or opening an already-open folder (or a subfolder of an open Git repo) focuses it instead of duplicating it.
 - Added **Git › Initialize Repository** and **Git › Publish Repository…** to initialize a folder or create and push a GitHub repository in one step.
 - Source Control shows **Publish Repository** in the branch bar, clean state, and menus when a repository has no remotes.
 

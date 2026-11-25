@@ -271,6 +271,14 @@ func (f *frame) beforeClose() bool {
 // anew as they show again.
 func (f *frame) view(c *ui.Context) {
 	f.services, f.hasServices = c.Services(), true
+	// Drain every started project before picking f.active, so a posted
+	// close or switch takes effect before a dropped project is built again.
+	for _, h := range slices.Clone(f.tabs) {
+		if h.a.started {
+			h.a.setServices(f.services)
+			h.a.drain()
+		}
+	}
 	// The project shown before goes out of sight now, rather than as
 	// another was chosen: the rest of its frame built it still.
 	switched := f.shown != f.active
@@ -279,12 +287,6 @@ func (f *frame) view(c *ui.Context) {
 			old.a.park()
 		}
 		f.shown = f.active
-	}
-	for _, h := range slices.Clone(f.tabs) {
-		if h != f.active && h.a.started {
-			h.a.setServices(f.services)
-			h.a.drain()
-		}
 	}
 	h := f.active
 	if h == nil {
@@ -516,6 +518,9 @@ func (f *frame) stop() {
 // stepProject shows the project by steps along the rail, around its ends.
 func (h *desktop) stepProject(by int) {
 	f := h.f
+	if f == nil {
+		return
+	}
 	tabs := f.shownTabs()
 	if n := len(tabs); n > 1 {
 		i := slices.Index(tabs, f.active)
@@ -526,6 +531,9 @@ func (h *desktop) stepProject(by int) {
 // showProject shows the project at i of the rail, the last for -1.
 func (h *desktop) showProject(i int) {
 	f := h.f
+	if f == nil {
+		return
+	}
 	tabs := f.shownTabs()
 	if i < 0 {
 		i = len(tabs) - 1
@@ -543,8 +551,11 @@ func (h *desktop) closeProject() { h.closeProjectThen(nil) }
 // done, unless its changes were kept open.
 func (h *desktop) closeProjectThen(done func()) {
 	m, f, a := h.m, h.f, h.a
+	if f == nil {
+		return
+	}
 	if len(f.tabs) < 2 {
-		f.win.Close()
+		m.closeFrame(f)
 		return
 	}
 	drop := func() {
@@ -570,6 +581,9 @@ func (h *desktop) closeProjectThen(done func()) {
 func (h *desktop) projectTabsChanged() { h.m.projectTabsChanged() }
 
 func (h *desktop) otherProjects() []*app {
+	if h.f == nil {
+		return nil
+	}
 	var out []*app
 	for _, d := range h.f.tabs {
 		if d != h {
@@ -580,6 +594,9 @@ func (h *desktop) otherProjects() []*app {
 }
 
 func (h *desktop) projectOf(t *colTab) *app {
+	if h.f == nil {
+		return nil
+	}
 	if d := h.f.owner(t); d != nil && d != h {
 		return d.a
 	}
@@ -587,6 +604,9 @@ func (h *desktop) projectOf(t *colTab) *app {
 }
 
 func (h *desktop) carryTab(t *colTab, to *app, copy bool) {
+	if h.f == nil {
+		return
+	}
 	for _, d := range h.f.tabs {
 		if d.a == to {
 			h.f.carryTab(t, d, copy)
@@ -1044,7 +1064,10 @@ func (f *frame) railDrop(e ui.Element, a *app, before *desktop) {
 		var dirs []string
 		for _, path := range paths {
 			if info, err := os.Stat(path); err == nil && info.IsDir() {
-				dirs = append(dirs, path)
+				clean := filepath.Clean(path)
+				if !slices.Contains(dirs, clean) {
+					dirs = append(dirs, clean)
+				}
 			}
 		}
 		switch {

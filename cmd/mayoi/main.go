@@ -221,10 +221,10 @@ func (h *desktop) confirmClose(name string, done func(int)) {
 func (h *desktop) trash(path string) error { return mygo.Shell.TrashItem(path) }
 func (h *desktop) nativeDrags() bool       { return true }
 func (h *desktop) shown() bool {
-	return h.f.active == h && h.f.win.IsVisible() && !h.f.win.IsMinimized()
+	return h.f != nil && h.f.active == h && h.f.win != nil && h.f.win.IsVisible() && !h.f.win.IsMinimized()
 }
 func (h *desktop) focused() bool {
-	return h.f.active == h && h.f.win.IsFocused()
+	return h.f != nil && h.f.active == h && h.f.win != nil && h.f.win.IsFocused()
 }
 
 // notify shows a notification of the system, when the app may show them.
@@ -262,7 +262,7 @@ func (h *desktop) copyImage(png []byte) error { return mygo.Clipboard.WriteImage
 
 // setTitle titles the window, while it shows the project.
 func (h *desktop) setTitle(title string) {
-	if h.f.active == h {
+	if h.f != nil && h.f.active == h && h.f.win != nil {
 		h.f.win.SetTitle(title)
 	}
 }
@@ -387,11 +387,18 @@ func (h *desktop) removeContextMenu() {
 
 // tell shows a message on the window.
 func (h *desktop) tell(kind mygo.MessageType, message, detail string) {
-	mygo.Dialog.Message(mygo.MessageOptions{Parent: h.f.win, Type: kind, Message: message, Detail: detail})
+	var parent *mygo.Window
+	if h.f != nil {
+		parent = h.f.win
+	}
+	mygo.Dialog.Message(mygo.MessageOptions{Parent: parent, Type: kind, Message: message, Detail: detail})
 }
 
 // show brings the window to the front, showing the project.
 func (h *desktop) show() {
+	if h.f == nil {
+		return
+	}
 	h.f.activate(h)
 	h.f.show()
 }
@@ -399,8 +406,11 @@ func (h *desktop) show() {
 // do runs fn on the window's app before its next frame.
 func (h *desktop) do(fn func()) {
 	h.a.post(fn)
-	if h.f.win != nil {
-		h.f.win.Invalidate()
+	h.mu.Lock()
+	f := h.f
+	h.mu.Unlock()
+	if f != nil && f.win != nil {
+		f.win.Invalidate()
 	}
 }
 
@@ -715,6 +725,7 @@ func splitPaths(paths []string) (folders, files []string) {
 // it in a new window. reuse lets a window that shows nothing take it
 // instead, as the one an app opens with.
 func (m *mayoi) openFolder(dir string, reuse bool) {
+	dir = remote.Clean(dir)
 	if w := m.showing(dir); w != nil {
 		w.show()
 		return
@@ -732,7 +743,7 @@ func (m *mayoi) openFolder(dir string, reuse bool) {
 		}
 	}
 	for _, w := range m.s.Windows {
-		if filepath.Clean(w.Folder) == dir && m.of(w) == nil {
+		if sameFolder(w.Folder, dir) && m.of(w) == nil {
 			// As the last session left it.
 			m.openWindow(w)
 			return
@@ -786,14 +797,63 @@ func (m *mayoi) openFileIn(in *desktop, path string, then func(a *app)) {
 	win.show()
 }
 
-// showing returns the window that has dir open.
+// showing returns the window that has dir open, or the window that has dir's
+// enclosing Git repository root open when dir is a non-independent subfolder
+// (no .git of its own).
 func (m *mayoi) showing(dir string) *desktop {
 	for _, w := range m.wins {
-		if w.a.folder() == dir {
+		if sameFolder(w.a.folder(), dir) {
 			return w
 		}
 	}
+	if root := repoRootOf(dir); root != "" && !sameFolder(root, dir) {
+		for _, w := range m.wins {
+			if sameFolder(w.a.folder(), root) {
+				return w
+			}
+		}
+	}
 	return nil
+}
+
+// repoRootOf returns the nearest ancestor directory (including dir) containing
+// a .git entry, or "" for remote paths or folders outside any Git repository.
+func repoRootOf(dir string) string {
+	if dir == "" || remote.Is(dir) {
+		return ""
+	}
+	for cur := filepath.Clean(dir); ; {
+		if _, err := os.Stat(filepath.Join(cur, ".git")); err == nil {
+			return cur
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return ""
+		}
+		cur = parent
+	}
+}
+
+// sameFolder reports whether a and b name the same folder: cleaned, and for
+// local folders that exist, the same directory on disk (following symlinks
+// and filesystem case rules).
+func sameFolder(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	a, b = remote.Clean(a), remote.Clean(b)
+	if a == b {
+		return true
+	}
+	if remote.Is(a) || remote.Is(b) {
+		return false
+	}
+	fiA, errA := os.Stat(a)
+	fiB, errB := os.Stat(b)
+	if errA == nil && errB == nil {
+		return os.SameFile(fiA, fiB)
+	}
+	return runtime.GOOS == "windows" && strings.EqualFold(a, b)
 }
 
 // of returns the window whose state is st.
