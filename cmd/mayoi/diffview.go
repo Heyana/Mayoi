@@ -263,6 +263,7 @@ type diffFile struct {
 
 	old, new diffSide
 	binary   bool
+	media    *diffMedia
 	hunks    []linediff.Hunk
 	// unified and pairs are the rows of every line, in each layout.
 	unified, pairs []diffRow
@@ -724,13 +725,17 @@ func (v *diffView) stop() {
 	v.edits, v.editing = nil, nil
 }
 
-// stop lets go of a file's highlighters.
+// stop lets go of a file's highlighters and media players.
 func (f *diffFile) stop() {
 	for _, s := range []*diffSide{&f.old, &f.new} {
 		if s.hl != nil {
 			s.hl.Close()
 			s.hl = nil
 		}
+	}
+	if f.media != nil {
+		f.media.stop()
+		f.media = nil
 	}
 }
 
@@ -1225,43 +1230,67 @@ func (a *app) refreshDiffFile(v *diffView, f *diffFile) bool {
 	bg.Go(func() {
 		defer recoverCrash()
 		var err error
-		read := func(rev, path string) (string, bool) {
-			text, ok, e := r.Show(rev, path)
+		mediaFile := isMedia(path)
+		var oldRaw, newRaw []byte
+		read := func(rev, p string) (string, []byte, bool) {
+			if mediaFile {
+				raw, ok, e := r.ShowBytes(rev, p)
+				if e != nil && err == nil {
+					err = e
+				}
+				return "", raw, ok
+			}
+			text, ok, e := r.Show(rev, p)
 			if e != nil && err == nil {
 				err = e
 			}
-			return text, ok
+			return text, nil, ok
 		}
 		if base == diffLocal {
-			if doc != nil {
-				old.text, old.ok = snap.String(), true
+			if mediaFile && isImage(path) {
+				var e error
+				oldRaw, e = readImage(path)
+				old.ok = e == nil
+				if e != nil && err == nil {
+					err = e
+				}
+				newRaw, e = readImage(peerPath)
+				new.ok = e == nil
+				if e != nil && err == nil {
+					err = e
+				}
 			} else {
-				old.text, _, err = readWork(path)
-				old.ok = err == nil
-			}
-			if peerDoc != nil {
-				new.text, new.ok = peerSnap.String(), true
-			} else {
-				new.text, _, err = readWork(peerPath)
-				new.ok = err == nil
+				if doc != nil {
+					old.text, old.ok = snap.String(), true
+				} else {
+					old.text, _, err = readWork(path)
+					old.ok = err == nil
+				}
+				if peerDoc != nil {
+					new.text, new.ok = peerSnap.String(), true
+				} else {
+					new.text, _, err = readWork(peerPath)
+					new.ok = err == nil
+				}
 			}
 		} else if readGit {
 			switch base {
 			case diffIndex:
-				old.text, old.ok = read("", path)
+				old.text, oldRaw, old.ok = read("", path)
 			case diffCommit:
-				old.text, old.ok = "", false
+				old.text, oldRaw, old.ok = "", nil, false
 				if parent != "" {
-					old.text, old.ok = read(parent, orig)
+					old.text, oldRaw, old.ok = read(parent, orig)
 				}
-				new.text, new.ok = read(hash, path)
+				new.text, newRaw, new.ok = read(hash, path)
 			default:
-				old.text, old.ok = read("HEAD", path)
+				old.text, oldRaw, old.ok = read("HEAD", path)
 			}
 			if base == diffStaged {
-				new.text, new.ok = read("", path)
+				new.text, newRaw, new.ok = read("", path)
 			}
 		}
+		var newVideo diffMediaSide
 		switch {
 		case base == diffLocal:
 			// Both sides were read above; open documents are incorporated by
@@ -1274,6 +1303,21 @@ func (a *app) refreshDiffFile(v *diffView, f *diffFile) bool {
 			if e != nil && err == nil {
 				err = e
 			}
+		case readDisk && isVideo(path) && !remote.Is(path) && base != diffStaged && base != diffCommit:
+			info, e := os.Stat(path)
+			if e == nil && info.Mode().IsRegular() {
+				new.ok = true
+				newVideo = diffMediaSide{ok: true, path: path, size: info.Size()}
+			} else if e != nil && !errors.Is(e, os.ErrNotExist) && err == nil {
+				err = e
+			}
+		case readDisk && isImage(path) && base != diffStaged && base != diffCommit:
+			var e error
+			newRaw, e = readImage(path)
+			new.ok = e == nil
+			if e != nil && !errors.Is(e, os.ErrNotExist) && err == nil {
+				err = e
+			}
 		case readDisk && base != diffStaged && base != diffCommit:
 			var e error
 			new.text, _, e = readWork(path)
@@ -1282,7 +1326,19 @@ func (a *app) refreshDiffFile(v *diffView, f *diffFile) bool {
 				err = e
 			}
 		}
-		binary := isBinary([]byte(old.text)) || isBinary([]byte(new.text))
+		binary := mediaFile || isBinary([]byte(old.text)) || isBinary([]byte(new.text))
+		var media *diffMedia
+		if binary {
+			switch {
+			case isImage(path):
+				media = buildDiffImageMedia(oldRaw, old.ok, newRaw, new.ok)
+			case isVideo(path):
+				if !newVideo.ok && new.ok {
+					newVideo = diffMediaSide{ok: true, data: newRaw, size: int64(len(newRaw))}
+				}
+				media = buildDiffVideoMedia(oldRaw, old.ok, newVideo)
+			}
+		}
 		oldLines, newLines := splitLines(old.text, old.ok), splitLines(new.text, new.ok)
 		compareOld, compareNew := compareDiffLines(oldLines, whitespace), compareDiffLines(newLines, whitespace)
 		var hunks []linediff.Hunk
@@ -1309,7 +1365,10 @@ func (a *app) refreshDiffFile(v *diffView, f *diffFile) bool {
 				f.err = ""
 			}
 			first := !f.loaded
-			f.loaded, f.binary, f.hunks, f.widest = true, binary, hunks, widest
+			if f.media != nil {
+				f.media.stop()
+			}
+			f.loaded, f.binary, f.media, f.hunks, f.widest = true, binary, media, hunks, widest
 			f.unified, f.pairs = unified, pairs
 			f.spans = nil
 			setDiffSide(&f.old, old, oldLines)
@@ -1561,6 +1620,14 @@ func (a *app) layoutRows(v *diffView, l diffGeometry) {
 			note = locales.Loading()
 		case f.err != "":
 			note = f.err
+		case f.binary && f.media != nil:
+			v.rows = append(v.rows, diffRow{
+				kind: rowMedia,
+				file: i,
+				old:  -1, new: -1, hunk: -1, peer: -1, gap: -1,
+				h: mediaRowHeight(f.media, v.viewW, a.diffFont.lineH),
+			})
+			continue
 		case f.binary:
 			note = locales.DiffBinary()
 		case !f.old.ok && !f.new.ok:
@@ -1606,7 +1673,7 @@ func (a *app) layoutRows(v *diffView, l diffGeometry) {
 		if r.kind == rowComment {
 			v.cards = append(v.cards, i)
 		}
-		if r.kind != rowCommit && r.kind != rowComment {
+		if r.kind != rowCommit && r.kind != rowComment && r.kind != rowMedia {
 			r.h = 1
 		}
 		if b.wrap && r.kind == rowLine {

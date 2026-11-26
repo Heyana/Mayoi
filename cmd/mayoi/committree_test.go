@@ -192,3 +192,60 @@ func (a *app) columnTabDiff() *diffView {
 	}
 	return nil
 }
+
+// Right-clicking a committed file in the commit files panel or under a
+// commit in Source Control offers Reveal in Explorer and Reveal in Finder.
+func TestCommitFileContextMenuReveal(t *testing.T) {
+	hs := newHarness(t, true)
+	hs.gitRepo()
+	a, tt := hs.a, hs.tt
+	a.settings.ScmTree = false
+	a.window.SidebarClosed = true
+	a.showCommit(a.git.history[0], true)
+	hs.settleGit()
+	hs.settle()
+	a.run("git.toggleCommitFiles")
+	hs.settle()
+
+	target := hs.path("README.md")
+	if err := tt.RightClick("README.md"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem(revealLabel()); err != nil {
+		t.Fatalf("no %q in commit file menu %q: %v", revealLabel(), tt.Menu(), err)
+	}
+	hs.settle()
+	if !slices.Equal(hs.h.revealed, []string{target}) {
+		t.Fatalf("revealed in Finder %q, want [%q]", hs.h.revealed, target)
+	}
+
+	if err := tt.RightClick("README.md"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("Reveal in Explorer"); err != nil {
+		t.Fatalf("no Reveal in Explorer in commit file menu %q: %v", tt.Menu(), err)
+	}
+	hs.until("revealed in explorer", func() bool { return a.explorerChoice() == target })
+
+	// Also verify under an expanded commit in Source Control.
+	hs.h.revealed = nil
+	a.run("view.scm")
+	hs.settleGit()
+	ctx := a.repository()
+	cm := a.git.history[0]
+	ctx.toggleCommitOpen(cm)
+	hs.until("commit files loaded", func() bool {
+		r := ctx.scm.commitFiles[cm.Hash]
+		return r != nil && !r.loading
+	})
+	if err := tt.RightClick("README.md"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem(revealLabel()); err != nil {
+		t.Fatalf("no %q in scm commit file menu %q: %v", revealLabel(), tt.Menu(), err)
+	}
+	hs.settle()
+	if !slices.Equal(hs.h.revealed, []string{target}) {
+		t.Fatalf("scm commit file revealed in Finder %q, want [%q]", hs.h.revealed, target)
+	}
+}

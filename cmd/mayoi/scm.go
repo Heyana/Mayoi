@@ -1894,6 +1894,9 @@ func (a *gitContext) scmFileMenu(m *ui.Menu, r scmRow, action *func()) {
 	if m.Item(locales.ScmRevealInExplorer()).Chosen() {
 		*action = func() { a.app.showExplorer(); a.app.revealInTree(e.Path) }
 	}
+	if m.Item(revealLabel()).Disabled(e.Letter() == 'D' && r.group != groupStaged || remote.Is(e.Path)).Chosen() {
+		*action = func() { a.app.host.reveal(e.Path) }
+	}
 	if m.Item(locales.CopyPath()).Chosen() {
 		a.app.services.WriteClipboard(e.Path)
 	}

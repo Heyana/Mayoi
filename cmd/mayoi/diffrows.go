@@ -26,6 +26,7 @@ const (
 	rowSpace                  // the room between two files
 	rowCommit                 // the message of the commit a diff shows
 	rowComment                // the card of a note, n of the review's
+	rowMedia                  // an image or video preview of a binary file
 )
 
 // diffRow is a row of a diff as it shows, of file, one of the diff's.

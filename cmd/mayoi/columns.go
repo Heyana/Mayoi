@@ -272,7 +272,7 @@ func (a *app) openFileIn(col *column, at int, path string, focus bool) {
 	if remote.Is(path) {
 		path = remote.Clean(path)
 	}
-	if isImage(path) {
+	if isImage(path) || isVideo(path) {
 		a.openImage(col, at, path, focus)
 		return
 	}
@@ -404,6 +404,9 @@ func (a *app) openImage(col *column, at int, path string, focus bool) {
 		return
 	}
 	v := newImageViewer(path)
+	if isVideo(path) {
+		v = newVideoViewer(path)
+	}
 	a.loadImage(v)
 	if a.tree != nil {
 		a.tree.Watch(path)
@@ -744,6 +747,13 @@ func (a *app) splitRight() {
 		}
 		return
 	case t.view != nil:
+		if t.view.video != nil {
+			v := newVideoViewer(t.view.path)
+			a.loadVideo(v)
+			a.addTab(nc, 0, &colTab{view: v})
+			a.activate(nc, 0, true)
+			return
+		}
 		// The same picture, fitted afresh.
 		v := newImageViewer(t.view.path)
 		v.src, v.w, v.h, v.size, v.err, v.loaded = t.view.src, t.view.w, t.view.h, t.view.size, t.view.err, t.view.loaded

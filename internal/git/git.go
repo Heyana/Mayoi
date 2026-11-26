@@ -280,7 +280,9 @@ func parseStatus(r *Repo, out []byte) *Status {
 // Show returns the text of path at rev: "HEAD", or "" for the index. ok
 // is false when it has no such file. A submodule's text is its commit, as
 // git diff says it.
-func (r *Repo) Show(rev, path string) (text string, ok bool, err error) {
+// ShowBytes returns the raw bytes of path at rev ("" for the index), and
+// whether rev has the file.
+func (r *Repo) ShowBytes(rev, path string) (data []byte, ok bool, err error) {
 	// ":0:" names the index: after a bare ":", a path that starts with
 	// "." reads as relative to the current folder, and git then fails on
 	// a file not in the index with "ambiguous argument".
@@ -292,24 +294,32 @@ func (r *Repo) Show(rev, path string) (text string, ok bool, err error) {
 	if err != nil {
 		// The commit of a submodule is in its own repository, not here.
 		if hash := r.gitlink(rev, path); hash != "" {
-			return subproject(hash, false), true, nil
+			return []byte(subproject(hash, false)), true, nil
 		}
 		var ge *Error
 		if errors.As(err, &ge) {
 			for _, s := range []string{"exists on disk, but not in", "does not exist in", "neither on disk nor in the index", "invalid object name", "bad revision", "is in the index, but not at stage"} {
 				if strings.Contains(ge.Stderr, s) {
-					return "", false, nil
+					return nil, false, nil
 				}
 			}
 		}
-		return "", false, err
+		return nil, false, err
 	}
 	// Git 2.55 and later show the commit of a submodule whose repository
 	// it can reach, as a log entry and its diff.
 	if bytes.HasPrefix(out, []byte("commit ")) {
 		if hash := r.gitlink(rev, path); hash != "" {
-			return subproject(hash, false), true, nil
+			return []byte(subproject(hash, false)), true, nil
 		}
+	}
+	return out, true, nil
+}
+
+func (r *Repo) Show(rev, path string) (text string, ok bool, err error) {
+	out, ok, err := r.ShowBytes(rev, path)
+	if err != nil || !ok {
+		return "", ok, err
 	}
 	return strings.ReplaceAll(string(out), "\r\n", "\n"), true, nil
 }

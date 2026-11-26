@@ -5408,6 +5408,16 @@ func (msgs Messages) ErrImageTooLarge() string {
 	return Catalog.Format(msgs.locale, "errImageTooLarge", nil)
 }
 
+// ErrVideoTooLarge says "the video is too large to show"
+// in the language the app shows.
+func ErrVideoTooLarge() string { return In(i18n.Locale()).ErrVideoTooLarge() }
+
+// ErrVideoTooLarge says "the video is too large to show"
+// in the language of msgs.
+func (msgs Messages) ErrVideoTooLarge() string {
+	return Catalog.Format(msgs.locale, "errVideoTooLarge", nil)
+}
+
 // ErrNameExists says "a file or folder with that name exists"
 // in the language the app shows.
 func ErrNameExists() string { return In(i18n.Locale()).ErrNameExists() }
@@ -6340,6 +6350,16 @@ func ImageLabel(name string) string { return In(i18n.Locale()).ImageLabel(name) 
 // in the language of msgs.
 func (msgs Messages) ImageLabel(name string) string {
 	return Catalog.Format(msgs.locale, "imageLabel", map[string]any{"name": name})
+}
+
+// VideoLabel says "Video {name}"
+// in the language the app shows.
+func VideoLabel(name string) string { return In(i18n.Locale()).VideoLabel(name) }
+
+// VideoLabel says "Video {name}"
+// in the language of msgs.
+func (msgs Messages) VideoLabel(name string) string {
+	return Catalog.Format(msgs.locale, "videoLabel", map[string]any{"name": name})
 }
 
 // InDir says "in {dir}"

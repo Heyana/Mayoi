@@ -6,6 +6,7 @@ import (
 
 	"mayoi/internal/bg"
 	"mayoi/internal/git"
+	"mayoi/internal/remote"
 	"mayoi/locales"
 
 	"github.com/egoist/mygo/ui"
@@ -299,6 +300,16 @@ func (a *app) commitTreeRowUI(c *ui.Context, v *diffView, i int, r commitTreeRow
 			if m.Item(openLabel(e)).Disabled(e.X == 'D').Chosen() {
 				*action = func() { a.openPath(e.Path, true) }
 			}
+			m.Separator()
+			if m.Item(locales.ScmRevealInExplorer()).Disabled(e.X == 'D' || a.root == "").Chosen() {
+				*action = func() { a.showExplorer(); a.revealInTree(e.Path) }
+			}
+			if m.Item(revealLabel()).Disabled(e.X == 'D' || remote.Is(e.Path)).Chosen() {
+				*action = func() { a.host.reveal(e.Path) }
+			}
+			if m.Item(locales.CopyPath()).Chosen() {
+				a.services.WriteClipboard(e.Path)
+			}
 		})
 	}
 	row.Children(func() {
@@ -493,6 +504,16 @@ func (a *gitContext) scmCommitFile(c *ui.Context, i int, r scmRow, action *func(
 			}
 			if m.Item(openLabel(r.e)).Disabled(r.e.X == 'D').Chosen() {
 				*action = func() { a.app.openPath(r.e.Path, true) }
+			}
+			m.Separator()
+			if m.Item(locales.ScmRevealInExplorer()).Disabled(r.e.X == 'D' || a.app.root == "").Chosen() {
+				*action = func() { a.app.showExplorer(); a.app.revealInTree(r.e.Path) }
+			}
+			if m.Item(revealLabel()).Disabled(r.e.X == 'D' || remote.Is(r.e.Path)).Chosen() {
+				*action = func() { a.app.host.reveal(r.e.Path) }
+			}
+			if m.Item(locales.CopyPath()).Chosen() {
+				a.app.services.WriteClipboard(r.e.Path)
 			}
 		})
 	}

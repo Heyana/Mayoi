@@ -5,6 +5,9 @@ needs a `## <version>` section here, or its build fails.
 
 ## Unreleased
 
+- Video files (`.mp4`, `.mov`, `.webm`, and more) now open in an inline video player tab.
+- Diffs preview changed, added, and removed images and videos instead of showing a binary notice.
+- Committed file context menus now include **Reveal in Explorer**, **Reveal in Finder**, and **Copy Path**.
 - Fixed a crash when closing an active project tab.
 - Dragging or opening an already-open folder (or a subfolder of an open Git repo) focuses it instead of duplicating it.
 - Added **Git › Initialize Repository** and **Git › Publish Repository…** to initialize a folder or create and push a GitHub repository in one step.

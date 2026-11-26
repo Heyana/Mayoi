@@ -494,7 +494,7 @@ func (a *app) imageZoom(by int) {
 		a.diagram.view.zoomBy(by)
 		return
 	}
-	if v := a.activeViewer(); v != nil && v.markdown == nil {
+	if v := a.activeViewer(); v != nil && v.markdown == nil && v.video == nil {
 		v.zoomBy(by)
 	}
 }

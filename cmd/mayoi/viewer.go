@@ -97,6 +97,9 @@ type viewer struct {
 	drawing bool
 	// plugin is the preview a plugin renders, of a file it declares.
 	plugin *pluginPreview
+	// video is the embedded player of a video file, nil for images and
+	// document previews.
+	video *videoPlayer
 }
 
 // newImageViewer makes the viewer of an image file, which load reads.
@@ -110,6 +113,10 @@ func (v *viewer) name() string { return filepath.Base(v.path) }
 // loadImage reads and decodes the image file in the background, keeping the
 // picture shown until the new one is ready.
 func (a *app) loadImage(v *viewer) {
+	if v.video != nil {
+		a.loadVideo(v)
+		return
+	}
 	v.loading++
 	n, path := v.loading, v.path
 	bg.Go(func() {
@@ -310,6 +317,9 @@ func (v *viewer) stop() {
 	if v.markdown != nil {
 		v.markdown.generation.Add(1)
 	}
+	if v.video != nil {
+		v.video.stop()
+	}
 }
 
 // fitMargin is the room a fitted picture leaves around it, in a pane
@@ -463,6 +473,10 @@ func (a *app) viewerInput(v *viewer, ev ui.InputEvent) bool {
 func (a *app) viewerView(c *ui.Context, v *viewer, name string) {
 	if v.markdown != nil {
 		a.markdownView(c, v, name)
+		return
+	}
+	if v.video != nil {
+		a.videoView(c, v, name)
 		return
 	}
 	p := a.pal
@@ -723,6 +737,18 @@ func (a *app) viewerStatus(c *ui.Context, v *viewer, item func(key, label, tip s
 			item("words", locales.PreviewWords(m.words)+" · "+locales.PreviewMinutes(m.minutes), "", nil, nil)
 		}
 		item("preview", locales.PreviewWord(), "", nil, nil)
+		return
+	}
+	if vp := v.video; vp != nil {
+		if vp.w > 0 && vp.h > 0 {
+			item("dims", fmt.Sprintf("%d × %d", vp.w, vp.h), "", nil, nil)
+		}
+		if d := formatDuration(vp.duration); d != "" {
+			item("duration", d, "", nil, nil)
+		}
+		if v.size > 0 {
+			item("size", sizeText(v.size), "", nil, nil)
+		}
 		return
 	}
 	if v.src == nil {

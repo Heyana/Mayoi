@@ -355,6 +355,7 @@ func (a *app) diffPaneUI(c *ui.Context, v *diffView) {
 					card.Children(func() { a.threadCard(c, v, th, noteTextW(noteW)) })
 				}
 			}
+			a.diffMediaWidgets(c, v, first, last, view, lineH)
 			// A button by the line under the pointer comments on it, unless
 			// the pointer chooses rows.
 			if hovered >= first && hovered <= last && hovered != sticky && rows[hovered].kind == rowLine && !v.dragged {
@@ -541,6 +542,8 @@ func (a *app) diffPaneUI(c *ui.Context, v *diffView) {
 				case rowNote:
 					// Said of the file, not a line of it: in the window's font.
 					uiText(pt, vx+l.textX, y, lineH, row.label, 12.5, 400, p.faint)
+				case rowMedia:
+					a.paintDiffMedia(pt, file, full)
 				case rowHunk:
 					pt.Fill(full, p.text.Alpha(0.035), 0)
 					rail(vx, y, h, neutral)
@@ -679,11 +682,11 @@ func (a *app) diffPaneUI(c *ui.Context, v *diffView) {
 						txt(vx+diffRailW+2*l.numW+8, y, mark, tint)
 					}
 				}
-				if v.selected(i) && row.kind != rowComment {
+				if v.selected(i) && row.kind != rowComment && row.kind != rowMedia {
 					pt.Fill(full, p.accent.Alpha(0.12), 0)
 					pt.Fill(ui.Rect{X: vx, Y: y, W: diffRailW, H: h}, p.accent.Alpha(0.6), 0)
 				}
-				if i == v.cursor && row.kind != rowComment {
+				if i == v.cursor && row.kind != rowComment && row.kind != rowMedia {
 					col := p.text.Alpha(0.05)
 					if focused {
 						col = p.text.Alpha(0.09)
