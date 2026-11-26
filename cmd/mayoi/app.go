@@ -347,7 +347,7 @@ type app struct {
 	transfers []*transfer
 
 	panelMax    bool // the panel takes the editor's room
-	welcomeView ui.Handle
+	welcomeView ui.ScrollState
 	rain        rainState   // The Matrix's, behind the welcome page
 	mascot      mascotState // the theme's character, Claude's or Qoder's
 	toldAt      time.Time   // when a toast last told what a command did

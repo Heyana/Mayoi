@@ -766,7 +766,7 @@ func (a *app) splitRight() {
 			// Read once, for each tab of it.
 			v = newPendingPR(t.diff.layout, cm.pr.number, cm.pr.title)
 			v.commit.pr.opening, v.commit.pr.threads, v.commit.pr.openErr = cm.pr.opening, cm.pr.threads, cm.pr.openErr
-			v.commit.pr.prPageState = cm.pr.prPageState
+			v.commit.pr.prPageState = cm.pr.prPageState.clone()
 		} else if cm != nil {
 			v = newCommitView(t.diff.layout, cm.key(), cm.info)
 			if cm.pr != nil {
@@ -774,6 +774,7 @@ func (a *app) splitRight() {
 				// be asked again.
 				pr := *cm.pr
 				pr.reading, pr.marking, pr.opening = false, nil, false
+				pr.prPageState = cm.pr.prPageState.clone()
 				v.commit.pr = &pr
 			}
 		}

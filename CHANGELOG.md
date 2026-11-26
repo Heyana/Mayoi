@@ -5,6 +5,7 @@ needs a `## <version>` section here, or its build fails.
 
 ## Unreleased
 
+- Switching projects preserves scroll position in the project rail and open views.
 - Video files (`.mp4`, `.mov`, `.webm`, and more) now open in an inline video player tab.
 - Diffs preview changed, added, and removed images and videos instead of showing a binary notice.
 - Committed file context menus now include **Reveal in Explorer**, **Reveal in Finder**, and **Copy Path**.

@@ -197,11 +197,11 @@ func (a *app) prViewUI(c *ui.Context, v *diffView) {
 			case prChanges:
 				a.prChangesUI(c, v)
 			case prCommits:
-				a.prScrollPage(c, "pr-commits", func() { a.prCommitsUI(c, v, now) })
+				a.prScrollPage(c, "pr-commits", &pr.scroll[prCommits], func() { a.prCommitsUI(c, v, now) })
 			case prChecks:
-				a.prScrollPage(c, "pr-checks", func() { a.prChecksPageUI(c, v) })
+				a.prScrollPage(c, "pr-checks", &pr.scroll[prChecks], func() { a.prChecksPageUI(c, v) })
 			default:
-				a.prScrollPage(c, "pr-conversation", func() { a.prConversationUI(c, v, now) })
+				a.prScrollPage(c, "pr-conversation", &pr.scroll[prConversation], func() { a.prConversationUI(c, v, now) })
 			}
 		})
 	})
@@ -234,8 +234,8 @@ func (a *app) setPRPage(v *diffView, page prPage) {
 
 // prScrollPage is a page of a pull request's tab that scrolls, its text
 // no wider than an issue's.
-func (a *app) prScrollPage(c *ui.Context, key string, fn func()) {
-	ui.Scroll(c.Key(key)).Fill().Children(func() {
+func (a *app) prScrollPage(c *ui.Context, key string, scroll *ui.ScrollState, fn func()) {
+	ui.Scroll(c.Key(key)).TrackScroll(scroll).Fill().Children(func() {
 		ui.Column(c).FillWidth().AlignItems(ui.Center).Padding(18, 24, 48, 24).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(issueWidth).Gap(14).Children(fn)
 		})

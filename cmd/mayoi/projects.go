@@ -73,6 +73,9 @@ type frame struct {
 	// railWidth is how wide the rail it drew is, for the names of its
 	// projects: the squares alone, or as wide as the longest name.
 	railWidth float32
+	// railScroll keeps the rail's scroll position as the window switches
+	// projects, each of which builds its own tree.
+	railScroll ui.ScrollState
 	// railLabels are the names cut to the room of their rows, by name and
 	// width, so a long name is measured once rather than in every frame.
 	railLabels map[railLabelKey]string
@@ -924,7 +927,7 @@ func (f *frame) railView(c *ui.Context, a *app) {
 	}
 	rail.Children(func() {
 		f.railTools(c, a)
-		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
+		ui.Scroll(c.Key("rail-scroll")).TrackScroll(&f.railScroll).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).FillWidth().Padding(6, railInset, 12, railInset).Gap(6).AlignItems(ui.Center).Children(func() {
 				for i, h := range tabs {
 					f.railTab(c, a, h, i, labels[i])

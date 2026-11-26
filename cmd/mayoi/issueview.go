@@ -28,6 +28,7 @@ type issueView struct {
 	reading bool
 	err     string
 	pane    ui.Handle
+	scroll  ui.ScrollState
 	// texts are the body and the comments parsed, as of parsedOf; stale
 	// is set once a picture of them arrived, for them to be parsed again.
 	texts    [][]markdownBlock
@@ -63,7 +64,10 @@ func (v *issueView) icon() *ui.SVG {
 
 // clone is the issue again, for another column, without its drafts.
 func (v *issueView) clone() *issueView {
-	return &issueView{repoRoot: v.repoRoot, number: v.number, info: v.info, err: v.err}
+	return &issueView{
+		repoRoot: v.repoRoot, number: v.number, info: v.info, err: v.err,
+		scroll: ui.ScrollState{X: v.scroll.X, Y: v.scroll.Y},
+	}
 }
 
 // issueTab is the column and place of the tab of issue n of the
@@ -273,7 +277,7 @@ func (a *app) issueViewUI(c *ui.Context, v *issueView) {
 		} else {
 			ui.Box(c.Key("issue-activity")).Height(2)
 		}
-		ui.Scroll(c.Key("issue-scroll")).Grow(1).Children(func() {
+		ui.Scroll(c.Key("issue-scroll")).TrackScroll(&v.scroll).Grow(1).Children(func() {
 			ui.Column(c).FillWidth().AlignItems(ui.Center).Padding(24, 24, 48, 24).Children(func() {
 				body := ui.Column(c).FillWidth().MaxWidth(issueWidth).Gap(14)
 				body.Children(func() {

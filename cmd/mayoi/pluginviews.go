@@ -93,8 +93,9 @@ type pluginView struct {
 	tree   *viewNode
 	// open are the tree nodes opened or closed by hand, and sel the row
 	// last clicked, by path.
-	open map[string]bool
-	sel  string
+	open   map[string]bool
+	sel    string
+	scroll ui.ScrollState
 }
 
 // renderedView is the tree a plugin rendered a view with last, which
@@ -297,7 +298,7 @@ func (a *app) pluginSidebar(c *ui.Context) {
 		return
 	}
 	pv := a.viewState(id, rv)
-	ui.Scroll(c.Key("plugin-view:"+id)).Grow(1).MinHeight(0).Padding(4, 8, 8, 8).Children(func() {
+	ui.Scroll(c.Key("plugin-view:"+id)).TrackScroll(&pv.scroll).Grow(1).MinHeight(0).Padding(4, 8, 8, 8).Children(func() {
 		// What the plugin renders first fades in, over what said it waits.
 		fadeIn(ui.Column(c.Key("body"))).Children(func() { a.drawViewNode(c, "root", pv.tree, pv) })
 	})
@@ -694,6 +695,7 @@ type pluginPreview struct {
 	output string
 	tree   *viewNode
 	view   *pluginView
+	scroll ui.ScrollState
 	gen    uint64 // refreshes asked for, which render again
 }
 
@@ -805,7 +807,7 @@ func (a *app) pluginPreviewView(c *ui.Context, v *viewer, name string) bool {
 	if pp.view == nil {
 		pp.view = &pluginView{plugin: pp.plugin, open: map[string]bool{}, tree: pp.tree}
 	}
-	ui.Scroll(c.Key("plugin-preview")).Fill().Background(p.editor).Padding(editorPadY*2, textPadR).Label(locales.PreviewLabel(name)).Children(func() {
+	ui.Scroll(c.Key("plugin-preview")).TrackScroll(&pp.scroll).Fill().Background(p.editor).Padding(editorPadY*2, textPadR).Label(locales.PreviewLabel(name)).Children(func() {
 		a.drawViewNode(c, "pp", pp.tree, pp.view)
 	})
 	return true

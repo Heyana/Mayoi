@@ -22,6 +22,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"mayoi/internal/cli"
+	"mayoi/internal/git"
 	"mayoi/internal/remote"
 	"mayoi/internal/settings"
 	"mayoi/locales"
@@ -2272,5 +2273,128 @@ func TestOpenFolderDeduplicatesRepoSubfolders(t *testing.T) {
 	tabs2[0].openFolders([]string{subB})
 	if len(f2.tabs) != 3 {
 		t.Fatalf("sibling monorepo subfolder did not open when root closed: tabs=%d", len(f2.tabs))
+	}
+}
+
+// Switching projects keeps the project rail's scroll position instead of
+// jumping back to the top when the active project tree remounts.
+func TestRailKeepsScrollWhenSwitchingProjects(t *testing.T) {
+	base := t.TempDir()
+	dirs := make([]string, 25)
+	for i := range dirs {
+		dir := filepath.Join(base, fmt.Sprintf("repo-%02d", i))
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		dirs[i] = dir
+	}
+	f, hs, tt := railFixture(t, dirs...)
+	f.m.s.RailOrder = "manual"
+	step(tt)
+	if f.railScroll.MaxY <= 0 {
+		t.Fatalf("rail is not scrollable: maxY=%v", f.railScroll.MaxY)
+	}
+	f.railScroll.Y = 240
+	step(tt)
+	step(tt)
+	wantY := f.railScroll.Y
+	if wantY <= 0 {
+		t.Fatalf("rail did not scroll: y=%v", wantY)
+	}
+	f.activate(hs[10])
+	step(tt)
+	step(tt)
+	if f.railScroll.Y != wantY {
+		t.Fatalf("after switch to repo-10: railScroll.Y=%v, want %v", f.railScroll.Y, wantY)
+	}
+	f.activate(hs[0])
+	step(tt)
+	step(tt)
+	if f.railScroll.Y != wantY {
+		t.Fatalf("after switch back to repo-00: railScroll.Y=%v, want %v", f.railScroll.Y, wantY)
+	}
+}
+
+// Switching away to another project and back preserves scroll positions
+// inside issue and pull request tabs, and splitting a PR tab does not
+// share scroll handles across columns.
+func TestProjectKeepsIssueAndPRScroll(t *testing.T) {
+	root, other := workspaceFixture(t), workspaceFixture(t)
+	f, hs, tt := railFixture(t, root, other)
+	a := hs[0].a
+
+	longBody := strings.Repeat("Paragraph line for scrolling.\n\n", 80)
+	iv := &issueView{
+		repoRoot: root,
+		number:   42,
+		info: &git.GHIssue{
+			Number: 42,
+			Title:  "Long issue",
+			State:  "OPEN",
+			Author: "alice",
+			Body:   longBody,
+		},
+	}
+	col := a.fileColumn()
+	a.addTab(col, 0, &colTab{issue: iv})
+	a.activate(col, 0, true)
+	step(tt)
+	iv.scroll.Y = 180
+	step(tt)
+	step(tt)
+	wantIssueY := iv.scroll.Y
+	if wantIssueY <= 0 {
+		t.Fatalf("issue view did not scroll: y=%v maxY=%v", iv.scroll.Y, iv.scroll.MaxY)
+	}
+	f.activate(hs[1])
+	step(tt)
+	f.activate(hs[0])
+	step(tt)
+	step(tt)
+	if iv.scroll.Y != wantIssueY {
+		t.Fatalf("issue scroll lost across project switch: got %v, want %v", iv.scroll.Y, wantIssueY)
+	}
+
+	pr := newPendingPR(layoutInline, 7, "Long PR")
+	pr.repoRoot = root
+	pr.commit.pr.fetched = true
+	pr.commit.pr.viewAsked = time.Now()
+	pr.commit.pr.viewAt = time.Now()
+	pr.commit.pr.view = &git.PRView{
+		Number: 7,
+		Title:  "Long PR",
+		State:  "OPEN",
+		Author: "alice",
+		Body:   longBody,
+	}
+	a.addTab(col, 1, &colTab{diff: pr})
+	a.activate(col, 1, true)
+	step(tt)
+	pr.commit.pr.scroll[prConversation].Y = 160
+	step(tt)
+	step(tt)
+	wantPRY := pr.commit.pr.scroll[prConversation].Y
+	if wantPRY <= 0 {
+		t.Fatalf("PR conversation did not scroll: y=%v maxY=%v", pr.commit.pr.scroll[prConversation].Y, pr.commit.pr.scroll[prConversation].MaxY)
+	}
+	f.activate(hs[1])
+	step(tt)
+	f.activate(hs[0])
+	step(tt)
+	step(tt)
+	if got := pr.commit.pr.scroll[prConversation].Y; got != wantPRY {
+		t.Fatalf("PR scroll lost across project switch: got %v, want %v", got, wantPRY)
+	}
+
+	// Splitting the PR tab to the right must clone scroll offsets without
+	// sharing ui.Handle across columns.
+	a.splitRight()
+	step(tt)
+	if len(a.cols) != 2 {
+		t.Fatalf("splitRight did not open a second column: %d", len(a.cols))
+	}
+	rightPR := a.cols[1].tab().diff.commit.pr
+	if rightPR.scroll[prConversation].Y != wantPRY {
+		t.Fatalf("split PR scroll=%v, want %v", rightPR.scroll[prConversation].Y, wantPRY)
 	}
 }

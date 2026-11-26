@@ -92,6 +92,21 @@ type prPageState struct {
 	reply     string
 	replying  bool
 	resolving map[string]bool
+	// scroll keeps each page's scroll position across page and project switches.
+	scroll [prPages]ui.ScrollState
+}
+
+// clone returns a copy of s for another column, carrying scroll offsets
+// without sharing scroll handles.
+func (s *prPageState) clone() *prPageState {
+	if s == nil {
+		return nil
+	}
+	cp := *s
+	for i := range cp.scroll {
+		cp.scroll[i] = ui.ScrollState{X: s.scroll[i].X, Y: s.scroll[i].Y}
+	}
+	return &cp
 }
 
 // name is how the tab of a pull request is named: its number and title.

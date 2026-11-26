@@ -1580,7 +1580,7 @@ func (a *app) welcome(c *ui.Context) {
 	p := a.pal
 	// Centered in the view, and scrolled when the window is too short.
 	view := a.welcomeView.Bounds(c)
-	page := ui.Scroll(c.Key("welcome")).Bind(&a.welcomeView).Fill().Background(p.editor)
+	page := ui.Scroll(c.Key("welcome")).TrackScroll(&a.welcomeView).Fill().Background(p.editor)
 	if a.settings.Theme == themeMatrix {
 		still := a.blurred || c.Preferences().ReduceMotion
 		page.Draw(func(pt *ui.Painter, r ui.Rect) { a.drawRain(pt, r, still) })

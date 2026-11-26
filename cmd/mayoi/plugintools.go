@@ -65,6 +65,7 @@ func (v *toolView) icon() *ui.SVG {
 func (v *toolView) clone() *toolView {
 	n := newToolView(v.kind)
 	n.run.sort, n.run.desc = v.run.sort, v.run.desc
+	n.run.scroll.X, n.run.scroll.Y = v.run.scroll.X, v.run.scroll.Y
 	n.log.plugin, n.log.levels, n.log.query = v.log.plugin, v.log.levels, v.log.query
 	return n
 }
@@ -238,6 +239,7 @@ type runningView struct {
 	active  int
 	total   int64
 	palette *palette
+	scroll  ui.ScrollState
 }
 
 // runRow is a plugin as Running Plugins read it, its values as they show.
@@ -448,7 +450,7 @@ func (a *app) runningViewUI(c *ui.Context, v *toolView) {
 	width := table.Bounds().W
 	table.Children(func() {
 		a.runningHead(c, r, width)
-		ui.Scroll(c.Key("running-rows")).Grow(1).MinHeight(0).Children(func() {
+		ui.Scroll(c.Key("running-rows")).TrackScroll(&r.scroll).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c.Key("rows")).Padding(4, 8, 12, 8).Gap(1).Children(func() {
 				for i := range r.rows {
 					a.runningRow(c, r, &r.rows[i], width)
