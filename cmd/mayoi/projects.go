@@ -143,6 +143,7 @@ func (m *mayoi) newFrame(h *desktop) *frame {
 	f.add(h)
 	f.active = h
 	f.setTarget()
+	f.stats.startBackground()
 
 	// Closing the window saves the files that save themselves, and with
 	// other unsaved changes asks about each first.
@@ -505,6 +506,7 @@ func (f *frame) railTick() {
 // stop ends the window's posts and its refresh tick as the window closes,
 // so one that fires meanwhile draws nothing.
 func (f *frame) stop() {
+	f.stats.stopBackground()
 	f.mu.Lock()
 	f.life, f.closed, f.target = lifeClosing, true, nil
 	timer := f.railTimer

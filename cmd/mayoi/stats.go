@@ -28,6 +28,14 @@ var statSpanLong = [statSpans]time.Duration{24 * time.Hour, 7 * 24 * time.Hour, 
 // it comes cheap.
 const statsEvery = time.Minute
 
+// statsStartDelay and statsBgEvery keep stats-cache.json fresh in the
+// background while the window is open (so external consumers like mcu-bridge
+// do not go stale until the user manually opens the commits panel).
+const (
+	statsStartDelay = 15 * time.Second
+	statsBgEvery    = 5 * time.Minute
+)
+
 // statWorkers is how many projects the panel reads at once: each read runs
 // git, and a window of many repositories must not start them all together.
 const statWorkers = 6
@@ -83,6 +91,49 @@ type statsState struct {
 	// restart.
 	reads  map[string]*statRead
 	loaded bool
+
+	bgMu      sync.Mutex
+	bgTimer   *time.Timer
+	bgStopped bool
+}
+
+// startBackground schedules low-frequency incremental refreshes of
+// stats-cache.json while the window is open, starting after statsStartDelay
+// so window startup stays fast.
+func (st *statsState) startBackground() {
+	st.bgMu.Lock()
+	defer st.bgMu.Unlock()
+	if st.bgStopped || st.bgTimer != nil {
+		return
+	}
+	st.bgTimer = time.AfterFunc(statsStartDelay, st.bgTick)
+}
+
+// stopBackground cancels any pending background stats refresh when the window
+// closes.
+func (st *statsState) stopBackground() {
+	st.bgMu.Lock()
+	st.bgStopped = true
+	t := st.bgTimer
+	st.bgTimer = nil
+	st.bgMu.Unlock()
+	if t != nil {
+		t.Stop()
+	}
+}
+
+func (st *statsState) bgTick() {
+	st.bgMu.Lock()
+	if st.bgStopped {
+		st.bgTimer = nil
+		st.bgMu.Unlock()
+		return
+	}
+	st.bgTimer = time.AfterFunc(statsBgEvery, st.bgTick)
+	st.bgMu.Unlock()
+	if f := st.f; f != nil {
+		f.post(func() { st.read(time.Now()) })
+	}
 }
 
 // toggle opens or closes the panel, reading the commits as it opens.
@@ -151,7 +202,9 @@ func (st *statsState) read(now time.Time) {
 				if st.gen == gen && len(st.rows) == 0 {
 					st.rows = counts
 				}
-				draw()
+				if st.open {
+					draw()
+				}
 			})
 		}
 		// A few projects read at a time: a rail of many repositories reads
@@ -199,7 +252,9 @@ func (st *statsState) read(now time.Time) {
 			st.reads = next
 			st.at, st.busy = now, false
 			st.rows = st.rowsOf(dirs, names, manual, now)
-			draw()
+			if st.open {
+				draw()
+			}
 		})
 		st.save(next)
 	})
