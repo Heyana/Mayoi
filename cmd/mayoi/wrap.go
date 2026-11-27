@@ -1,8 +1,6 @@
 package main
 
 import (
-	"unicode/utf8"
-
 	"github.com/egoist/mygo/ui"
 
 	"mayoi/internal/settings"
@@ -204,25 +202,34 @@ func (a *app) rowsOf(d *editor, snap ui.TextSnapshot, first, last int, width flo
 		text := snap.Slice(s, e)
 		xs := make([]float32, 0, len(wr.runes))
 		ascii := isASCII(text)
+		approx := e-s > highlightRunes
 		var x float32
-		k, at := 0, 0 // the rune, and the row next found
+		k, at, segStart := 0, 0, 0 // rune index, next row break, byte start of segment
 		for j, r := range text {
-			for at < len(wr.runes) && wr.runes[at] == k {
-				xs = append(xs, x)
-				at++
+			if at < len(wr.runes) && wr.runes[at] == k {
+				if !ascii && !approx && j > segStart {
+					x = f.advanceWidth(x, text[segStart:j])
+					segStart = j
+				}
+				for at < len(wr.runes) && wr.runes[at] == k {
+					xs = append(xs, x)
+					at++
+				}
+				if at == len(wr.runes) {
+					break
+				}
 			}
-			if at == len(wr.runes) {
-				break
-			}
-			switch {
-			case r == '\t':
-				x = f.afterTab(x)
-			case ascii || e-s > highlightRunes:
-				x += f.charW
-			default:
-				x = f.width(text[:j+utf8.RuneLen(r)])
+			if ascii || approx {
+				if r == '\t' {
+					x = f.afterTab(x)
+				} else {
+					x += f.charW
+				}
 			}
 			k++
+		}
+		if len(xs) < len(wr.runes) && !ascii && !approx && len(text) > segStart {
+			x = f.advanceWidth(x, text[segStart:])
 		}
 		for len(xs) < len(wr.runes) {
 			xs = append(xs, x)

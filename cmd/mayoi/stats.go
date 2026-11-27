@@ -136,6 +136,18 @@ func (st *statsState) bgTick() {
 	}
 }
 
+// invalidate clears the refresh cooldown so new commits appear immediately
+// when the stats panel is open or next opened.
+func (st *statsState) invalidate() {
+	if st == nil {
+		return
+	}
+	st.at = time.Time{}
+	if st.open {
+		st.read(time.Now())
+	}
+}
+
 // toggle opens or closes the panel, reading the commits as it opens.
 func (st *statsState) toggle() {
 	st.open = !st.open

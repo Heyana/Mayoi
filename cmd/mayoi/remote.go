@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"io/fs"
 	"os"
@@ -328,21 +327,21 @@ func (a *app) loadRemote(d *document) {
 	go func() {
 		// The stat and the text at one round trip.
 		info, data, err := vfs.ReadFileInfo(path, maxOpenBytes)
-		a.post(func() { a.remoteLoaded(d, path, info, data, err) })
+		var prep preparedFile
+		if err == nil {
+			prep, err = prepareLoadedFile(data)
+		}
+		a.post(func() { a.remoteLoadedPrepared(d, path, info, prep, err) })
 	}()
 }
 
-// remoteLoaded installs a file read in the background. Local failures
-// retain their tab; remote failures follow the host's existing policy.
-func (a *app) remoteLoaded(d *document, path string, info fs.FileInfo, data []byte, err error) {
+// remoteLoadedPrepared installs a file prepared in the background. Local
+// failures retain their tab; remote failures follow the host's existing policy.
+func (a *app) remoteLoadedPrepared(d *document, path string, info fs.FileInfo, prep preparedFile, err error) {
 	if !slices.Contains(a.docs, d) || d.path != path {
 		return
 	}
 	defer d.readDone()
-	var enc *textEncoding
-	if err == nil {
-		data, enc, err = decodeFile(data)
-	}
 	if err != nil {
 		d.sync, d.loadErr = syncLoadFailed, err
 		if !remote.Is(path) {
@@ -369,17 +368,14 @@ func (a *app) remoteLoaded(d *document, path string, info fs.FileInfo, data []by
 		return
 	}
 	d.sync, d.loadErr = syncIdle, nil
-	crlf := bytes.Contains(data, []byte("\r\n"))
-	if crlf {
-		data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
-	}
-	d.buf.Set(string(data))
+	d.buf.Set(prep.text)
 	d.hist = history{}
 	d.markSaved()
-	d.crlf, d.diskCRLF = crlf, crlf
-	d.encoding = enc
+	d.crlf, d.diskCRLF = prep.crlf, prep.crlf
+	d.encoding = prep.enc
 	d.indent = detectIndent(d.buf.Snapshot(), path)
-	d.measureWidest()
+	d.widest = prep.widest
+	d.widestVersion = d.buf.Snapshot().Version()
 	d.stamp = stampOf(info)
 	for _, ed := range d.views {
 		if ts := ed.restoreTab; ts != nil {

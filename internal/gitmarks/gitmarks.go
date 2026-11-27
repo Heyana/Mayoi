@@ -42,12 +42,21 @@ type Marks struct {
 // lines, so that typing in a long one does not keep a core comparing.
 const diffPause = 150 * time.Millisecond
 
+// maxDiffBytes is the largest document size for live gutter Git marks:
+// diffing multi-megabyte files on every edit stalls background workers
+// and allocates tens of megabytes per keystroke.
+const maxDiffBytes = 2 << 20
+
 // Refresh reads the base of the file at path again, when it may have
 // changed, and compares the lines of snap once its text changed. The work
 // in the background reports through post, which runs a function on the
 // goroutine that calls Refresh.
 func (g *Marks) Refresh(path string, snap ui.TextSnapshot, post func(func())) {
 	if path == "" {
+		return
+	}
+	if snap.ByteLen() > maxDiffBytes {
+		g.Lines, g.Hunks, g.of, g.base = nil, nil, nil, nil
 		return
 	}
 	if !g.loaded && !g.head.Running() {

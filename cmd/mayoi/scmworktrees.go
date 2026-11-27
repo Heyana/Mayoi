@@ -117,13 +117,7 @@ func readWorktree(wt git.Worktree, prev *git.Status, prevStat map[string]git.Fil
 		}
 		out.st = st
 		if len(st.Entries) > 0 {
-			// A clean work tree has no lines to count, nor one whose files
-			// are those counted last.
-			if prev == nil || prevStat == nil || !st.Equal(prev) {
-				out.stat, _ = r.WorkNumstat()
-			} else {
-				out.stat = prevStat
-			}
+			out.stat, _ = r.WorkNumstat()
 		}
 		out.groups = groupStatus(st)
 		out.fileCount = worktreeFileCount(out.groups)

@@ -695,7 +695,9 @@ func (a *app) saveDocElse(d *document, then, cancelled func()) {
 	}
 	saved := func() {
 		d.diskGone, d.autoSave.failed = false, false
-		a.repositoryForPath(d.path).git.statusRead.Invalidate()
+		repo := a.repositoryForPath(d.path)
+		repo.git.statusRead.Invalidate()
+		repo.git.workStatStale = true
 		a.rememberTabs()
 		if then != nil {
 			then()
@@ -857,15 +859,40 @@ func (a *app) reloadDoc(d *document) {
 		a.reloadRemote(d)
 		return
 	}
-	data, err := os.ReadFile(d.path)
-	if err != nil {
+	info, err := os.Stat(d.path)
+	if err != nil || info.Size() > maxOpenBytes {
 		return
 	}
-	data, enc, err := decodeFile(data)
-	if err != nil {
+	if info.Size() <= widestWhole {
+		data, err := os.ReadFile(d.path)
+		if err != nil {
+			return
+		}
+		prep, err := prepareLoadedFile(data)
+		if err != nil {
+			return
+		}
+		d.takePreparedText(prep)
 		return
 	}
-	d.takeText(data, enc)
+	path, ver := d.path, d.buf.Version()
+	bg.Go(func() {
+		defer recoverCrash()
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return
+		}
+		prep, err := prepareLoadedFile(data)
+		if err != nil {
+			return
+		}
+		a.post(func() {
+			if !slices.Contains(a.docs, d) || d.path != path || d.dirty() || d.buf.Version() != ver {
+				return
+			}
+			d.takePreparedText(prep)
+		})
+	})
 }
 
 // takeText makes a document's text data, read from its file in enc, as a
@@ -873,11 +900,18 @@ func (a *app) reloadDoc(d *document) {
 // selections stay on their text, and the editors stay where they are
 // scrolled, the line at the top of each on its text too.
 func (d *document) takeText(data []byte, enc *textEncoding) {
-	d.encoding = enc
-	data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
-	if old := d.buf.String(); string(data) != old {
+	crlf := bytes.Contains(data, []byte("\r\n"))
+	if crlf {
+		data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
+	}
+	d.takePreparedText(preparedFile{text: string(data), enc: enc, crlf: crlf, widest: measureBytesWidest(data)})
+}
+
+func (d *document) takePreparedText(prep preparedFile) {
+	d.encoding = prep.enc
+	if old := d.buf.String(); prep.text != old {
 		if ed := d.main(); ed != nil {
-			e, from, to := reloadEdit(old, string(data))
+			e, from, to := reloadEdit(old, prep.text)
 			n := utf8.RuneCountInString(e.text)
 			moved := func(x int) int {
 				switch {
@@ -895,7 +929,8 @@ func (d *document) takeText(data []byte, enc *textEncoding) {
 				o.reloaded = &reloadShift{from: from, to: to, delta: delta}
 			}
 		}
-		d.measureWidest()
+		d.widest = prep.widest
+		d.widestVersion = d.buf.Snapshot().Version()
 	}
 	d.markSaved()
 }

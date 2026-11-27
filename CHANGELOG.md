@@ -5,6 +5,10 @@ needs a `## <version>` section here, or its build fails.
 
 ## Unreleased
 
+- Opening, reloading, wrapping, and editing very large or long non-ASCII files no longer freezes the editor.
+- Continuing to edit an already-modified file updates `+/−` line counts in Source Control, the project rail, and **All Worktree Changes**.
+- Active project edits and commits immediately refresh the project rail's activity time, sorting, and Recent Commits stats.
+- Pushing or updating refs from a terminal refreshes Source Control and project rail counts on the next metadata check.
 - Pushing, pulling, or committing immediately updates the project's status counts in the project rail.
 - Switching projects preserves scroll position in the project rail and open views.
 - Video files (`.mp4`, `.mov`, `.webm`, and more) now open in an inline video player tab.

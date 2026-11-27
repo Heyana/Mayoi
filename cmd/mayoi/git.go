@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -47,8 +48,10 @@ type gitState struct {
 	entries map[string]git.Entry
 	dirs    map[string]byte
 	// workStat are the lines each changed file added and deleted, by path,
-	// read with the status.
-	workStat map[string]git.FileStat
+	// read with the status. workStatStale forces a recount even when the
+	// set of changed files and their status letters stayed the same.
+	workStat      map[string]git.FileStat
+	workStatStale bool
 	// groups are the files of status in each group of the source control
 	// view, worked out for the status groupsOf.
 	groups   [groupCount][]git.Entry
@@ -321,9 +324,10 @@ func (a *gitContext) refreshGit() {
 	// folder Git lists them in tells by its time.
 	worktreesOf, worktreesAny := g.worktreesOf, g.worktreesAny
 	// The lines of the changed files are counted again once the status
-	// changes: a file that changed keeps its letter while it is edited,
-	// so the count is kept as long as its files and their letters are.
+	// changes or a file save/Git operation marks workStatStale.
 	prevSt, prevStat := g.status, g.workStat
+	recountStat := g.workStatStale
+	g.workStatStale = false
 	bg.Go(func() {
 		defer recoverCrash()
 		var st *git.Status
@@ -342,9 +346,7 @@ func (a *gitContext) refreshGit() {
 		readGit(func() {
 			st, err = r.Status()
 			if err == nil && len(st.Entries) > 0 {
-				// A clean work tree has no lines to count, nor one whose
-				// files are those counted last.
-				if prevSt == nil || prevStat == nil || !st.Equal(prevSt) {
+				if prevSt == nil || prevStat == nil || recountStat || !st.Equal(prevSt) {
 					workStat, _ = r.WorkNumstat()
 				} else {
 					workStat = prevStat
@@ -387,7 +389,12 @@ func (a *gitContext) refreshGit() {
 				return
 			}
 			a.setStatus(st)
-			g.workStat = workStat
+			if !maps.Equal(g.workStat, workStat) {
+				g.workStat = workStat
+				if a.app != nil && a.git == &a.app.git {
+					a.app.railOpAt = time.Now()
+				}
+			}
 			g.branches, g.tags = refs.Branches, refs.Tags
 			if stashesErr == nil {
 				g.stashes = stashes
@@ -557,18 +564,23 @@ func (a *gitContext) pruneCommitReads() {
 // the history is read again.
 func (a *gitContext) tookGitMeta(t, refs time.Time) {
 	g := a.git
+	changed := false
 	if !t.Equal(g.meta) {
 		a.app.repositories.scan.Invalidate()
 		if !g.meta.IsZero() {
-			a.gitChanged()
+			changed = true
 		}
 		g.meta = t
 	}
 	if !refs.Equal(g.refsMeta) {
 		if !g.refsMeta.IsZero() {
 			g.refsGen++
+			changed = true
 		}
 		g.refsMeta = refs
+	}
+	if changed {
+		a.gitChanged()
 	}
 }
 
@@ -656,9 +668,16 @@ func (a *gitContext) setStatus(st *git.Status) {
 	if g.status.Equal(st) {
 		return
 	}
+	prevHead := ""
+	if g.status != nil {
+		prevHead = g.status.Head
+	}
 	g.status = st
 	if a.app != nil && a.git == &a.app.git {
 		a.app.railOpAt = time.Now()
+		if prevHead != "" && prevHead != st.Head {
+			a.app.stats.invalidate()
+		}
 	}
 	g.entries = make(map[string]git.Entry, len(st.Entries))
 	g.dirs = map[string]byte{}
@@ -725,6 +744,7 @@ func (a *gitContext) gitChanged() {
 	}
 	a.app.diffsChanged(a.git.repo.Root)
 	a.git.statusRead.Invalidate()
+	a.git.workStatStale = true
 	a.git.remotesStale = true
 	for _, ctx := range a.app.repositories.contexts {
 		if ctx.git.repo != nil && a.git.repo != nil && ctx.git.repo.Root != a.git.repo.Root && ctx.git.repo.Contains(a.git.repo.Root) {

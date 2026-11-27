@@ -2436,3 +2436,79 @@ func TestRailUpdatesImmediatelyAfterPush(t *testing.T) {
 		t.Fatalf("after push: rail ahead=%d (git status ahead=%d), want 0", tabs[0].ahead, tabs[0].a.git.status.Ahead)
 	}
 }
+
+// Continuing to edit an already-modified file refreshes workStat and updates
+// the active project's rail line counts and activity timestamp.
+func TestRailUpdatesLineStatsAndActivityOnRepeatedEdits(t *testing.T) {
+	hs := newHarness(t, true)
+	hs.gitRepo()
+	_, tabs, tt := railFixture(t, hs.root, workspaceFixture(t))
+
+	// First edit: main.go becomes modified.
+	writeLines(t, hs.path("main.go"), 10)
+	tabs[0].a.gitChanged()
+	deadline := time.Now().Add(5 * time.Second)
+	for (tabs[0].added == 0 || tabs[0].a.git.status == nil) && time.Now().Before(deadline) {
+		step(tt)
+		time.Sleep(5 * time.Millisecond)
+	}
+	firstAdded := tabs[0].added
+	if firstAdded == 0 {
+		t.Fatalf("after first edit: rail added=%d, want > 0", firstAdded)
+	}
+
+	// Age activityAt artificially, then edit the SAME already-modified file again.
+	oldActivity := time.Now().Add(-2 * time.Hour)
+	tabs[0].activityAt = oldActivity
+	writeLines(t, hs.path("main.go"), 30)
+	tabs[0].a.gitChanged()
+	deadline = time.Now().Add(5 * time.Second)
+	for tabs[0].added == firstAdded && time.Now().Before(deadline) {
+		step(tt)
+		time.Sleep(5 * time.Millisecond)
+	}
+	if tabs[0].added <= firstAdded {
+		t.Fatalf("after second edit to same file: rail added=%d, want > %d", tabs[0].added, firstAdded)
+	}
+	if !tabs[0].activityAt.After(oldActivity) {
+		t.Fatalf("activityAt did not advance after edit: got %v, old %v", tabs[0].activityAt, oldActivity)
+	}
+}
+
+// Updating refs (e.g. git push in a terminal) triggers gitChanged via tookGitMeta.
+func TestTookGitMetaRefsInvalidatesStatus(t *testing.T) {
+	hs := newHarness(t, true)
+	hs.gitRepo()
+	hs.settleGit()
+
+	ctx := hs.a.repository()
+	t0 := time.Now().Add(-time.Minute)
+	ctx.tookGitMeta(t0, t0)
+	hs.settleGit()
+	if ctx.git.statusRead.Stale() {
+		t.Fatal("statusRead unexpectedly stale before ref update")
+	}
+
+	// Only refs mtime changes (as happens on `git push` from a terminal).
+	ctx.tookGitMeta(t0, t0.Add(time.Second))
+	if !ctx.git.statusRead.Stale() {
+		t.Fatal("refs mtime change did not invalidate statusRead")
+	}
+}
+
+// prepareLoadedFile decodes, normalizes CRLF, and computes widest column count.
+func TestPrepareLoadedFileMeasuresWidestAndCRLF(t *testing.T) {
+	prep, err := prepareLoadedFile([]byte("short\r\n\tindented line\r\n"))
+	if err != nil {
+		t.Fatalf("prepareLoadedFile: %v", err)
+	}
+	if !prep.crlf {
+		t.Error("expected crlf=true")
+	}
+	if strings.Contains(prep.text, "\r") {
+		t.Errorf("CR not normalized: %q", prep.text)
+	}
+	if want := columns("\tindented line"); prep.widest != want {
+		t.Errorf("widest=%d, want %d", prep.widest, want)
+	}
+}

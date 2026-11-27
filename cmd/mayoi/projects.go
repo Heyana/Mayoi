@@ -1362,6 +1362,9 @@ func (f *frame) railChanges(h *desktop) int {
 			h.changes, h.ahead, h.behind = len(st.Entries), st.Ahead, st.Behind
 			h.hasRepo, h.repoDir, h.repoAt = true, dir, time.Now()
 			h.changesAt = time.Now()
+			if h.a.railOpAt.After(h.activityAt) {
+				h.activityAt = h.a.railOpAt
+			}
 			if h.changesBusy {
 				h.changesBusy = false
 				h.changesGen++

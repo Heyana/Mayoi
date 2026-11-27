@@ -128,9 +128,12 @@ func (f codeFont) featureList() []string {
 // width measures a run from the start of a line as the text area lays it
 // out: ASCII by its cells and the tab stops, anything else by shaping it,
 // up to the next tab.
-func (f codeFont) width(s string) float32 {
-	var x, from float32 // from is where the text after the last tab starts
-	last := 0           // and last its offset
+func (f codeFont) width(s string) float32 { return f.advanceWidth(0, s) }
+
+// advanceWidth measures s starting from horizontal offset x, keeping tab
+// stops aligned without re-shaping the prefix before x.
+func (f codeFont) advanceWidth(x float32, s string) float32 {
+	from, last := x, 0 // where the run after the last tab starts
 	for i := 0; i < len(s); i++ {
 		switch c := s[i]; {
 		case c == '\t':
@@ -1166,11 +1169,17 @@ func (a *app) revealColumn(d *editor, snap ui.TextSnapshot, caret int, viewW, te
 	if viewW <= 0 {
 		return
 	}
-	line := snap.LineAt(min(caret, snap.Len()))
+	pos := min(caret, snap.Len())
+	line := snap.LineAt(pos)
 	s, _ := snap.LineRange(line)
 	// Measure the line as the area lays it out, tabs at the platform's
-	// stops.
-	x := textX + a.font.width(snap.Slice(s, min(caret, snap.Len())))
+	// stops; ultra-long lines use cell approximation to avoid shaping stalls.
+	var x float32
+	if pos-s > highlightRunes {
+		x = textX + float32(pos-s)*a.font.charW
+	} else {
+		x = textX + a.font.width(snap.Slice(s, pos))
+	}
 	if d.pressing {
 		// The caret follows the pointer, which a margin would scroll on and
 		// on from inside the view: only past the edge, as far as it is past.

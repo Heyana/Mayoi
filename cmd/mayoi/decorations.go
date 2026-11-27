@@ -380,7 +380,7 @@ func (a *app) selectedWhitespace(d *editor, snap ui.TextSnapshot, first, last in
 			case ascii:
 				w = a.font.charW
 			default:
-				w = a.textWidth(text[:j+utf8.RuneLen(r)]) - x
+				w = a.font.advanceWidth(x, text[j:j+utf8.RuneLen(r)]) - x
 			}
 			if k >= from && (r == ' ' || r == '\t') && len(out) < 4000 {
 				out = append(out, whitespaceMark{line: i, x0: x, x1: x + w, tab: r == '\t'})

@@ -452,6 +452,41 @@ func (d *document) wrote(snap ui.TextSnapshot, crlf bool) {
 	d.diskCRLF = crlf
 }
 
+// preparedFile holds a file decoded, normalized to LF, and measured off
+// the main UI thread so opening large files never stalls rendering.
+type preparedFile struct {
+	text   string
+	enc    *textEncoding
+	crlf   bool
+	widest int
+}
+
+// prepareLoadedFile decodes raw bytes, normalizes CRLF to LF, and measures
+// the widest line in columns. Safe to run in a background goroutine.
+func prepareLoadedFile(data []byte) (preparedFile, error) {
+	text, enc, err := decodeFile(data)
+	if err != nil {
+		return preparedFile{}, err
+	}
+	crlf := bytes.Contains(text, []byte("\r\n"))
+	if crlf {
+		text = bytes.ReplaceAll(text, []byte("\r\n"), []byte("\n"))
+	}
+	return preparedFile{
+		text:   string(text),
+		enc:    enc,
+		crlf:   crlf,
+		widest: measureBytesWidest(text),
+	}, nil
+}
+
+// measureBytesWidest returns the longest line of data in columns.
+func measureBytesWidest(data []byte) int {
+	w := &widthCounter{}
+	_, _ = w.Write(data)
+	return max(w.widest, w.col)
+}
+
 // measureWidest measures the longest line of the whole document.
 func (d *document) measureWidest() {
 	snap := d.buf.Snapshot()

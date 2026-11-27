@@ -82,13 +82,17 @@ func (a *app) startLocalReads(read localReader) {
 		bg.Go(func() {
 			info, data, err := read(path, maxOpenBytes)
 			timer.Stop()
+			var prep preparedFile
+			if err == nil {
+				prep, err = prepareLoadedFile(data)
+			}
 			a.post(func() {
 				if held {
 					held = false
 					a.localReads--
 				}
 				if !a.loadsClosed && a.root == root && slices.Contains(a.docs, d) && d.path == path && d.sync == syncLoading && !d.dirty() {
-					a.remoteLoaded(d, path, info, data, err)
+					a.remoteLoadedPrepared(d, path, info, prep, err)
 				} else {
 					d.readDone()
 				}
