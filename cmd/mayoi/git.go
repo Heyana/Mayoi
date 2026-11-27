@@ -657,6 +657,9 @@ func (a *gitContext) setStatus(st *git.Status) {
 		return
 	}
 	g.status = st
+	if a.app != nil && a.git == &a.app.git {
+		a.app.railOpAt = time.Now()
+	}
 	g.entries = make(map[string]git.Entry, len(st.Entries))
 	g.dirs = map[string]byte{}
 	for _, e := range st.Entries {
@@ -710,6 +713,9 @@ func (a *gitContext) branch() string {
 func (a *gitContext) gitChanged() {
 	if !a.live() {
 		return
+	}
+	if a.git == &a.app.git {
+		a.app.railOpAt = time.Now()
 	}
 	a.invalidateScmPanels()
 	for _, d := range a.app.docs {

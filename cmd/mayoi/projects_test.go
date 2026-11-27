@@ -2398,3 +2398,41 @@ func TestProjectKeepsIssueAndPRScroll(t *testing.T) {
 		t.Fatalf("split PR scroll=%v, want %v", rightPR.scroll[prConversation].Y, wantPRY)
 	}
 }
+
+// Pushing commits from the active project clears its ahead count on the
+// project rail immediately rather than waiting for the 10s rail interval.
+func TestRailUpdatesImmediatelyAfterPush(t *testing.T) {
+	hs := newHarness(t, true)
+	gitCmd := hs.gitRepo()
+	bare := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", "--bare", "-b", "main", bare).CombinedOutput(); err != nil {
+		t.Fatalf("git init --bare: %v\n%s", err, out)
+	}
+	gitCmd("remote", "add", "origin", bare)
+	gitCmd("push", "-q", "-u", "origin", "main")
+	writeLines(t, hs.path("pushed.go"), 3)
+	gitCmd("add", "pushed.go")
+	gitCmd("commit", "-q", "-m", "ahead one")
+
+	_, tabs, tt := railFixture(t, hs.root, workspaceFixture(t))
+	deadline := time.Now().Add(5 * time.Second)
+	for (tabs[0].ahead != 1 || tabs[0].a.git.status == nil || tabs[0].a.git.status.Ahead != 1) && time.Now().Before(deadline) {
+		step(tt)
+		time.Sleep(5 * time.Millisecond)
+	}
+	if tabs[0].ahead != 1 || tabs[0].a.git.status == nil || tabs[0].a.git.status.Ahead != 1 {
+		t.Fatalf("before push: rail ahead=%d, git status=%+v", tabs[0].ahead, tabs[0].a.git.status)
+	}
+
+	// Push via the app's git command; the rail must clear ↑1 well before
+	// railChangesEvery (10s).
+	tabs[0].a.push()
+	deadline = time.Now().Add(3 * time.Second)
+	for tabs[0].ahead != 0 && time.Now().Before(deadline) {
+		step(tt)
+		time.Sleep(5 * time.Millisecond)
+	}
+	if tabs[0].ahead != 0 {
+		t.Fatalf("after push: rail ahead=%d (git status ahead=%d), want 0", tabs[0].ahead, tabs[0].a.git.status.Ahead)
+	}
+}

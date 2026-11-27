@@ -900,6 +900,7 @@ func (f *frame) railView(c *ui.Context, a *app) {
 	}
 	var counts, subs float32
 	for _, h := range tabs {
+		f.railChanges(h)
 		counts = max(counts, railChipsWidth(railChips(h, p)))
 		if compact {
 			continue
@@ -1345,9 +1346,6 @@ func (f *frame) railChanges(h *desktop) int {
 	// Git did something here since the read: the counts are stale at once,
 	// not after the interval.
 	opened := h.a.railOpAt.After(h.changesAt)
-	if h.changesBusy || (!opened && time.Since(h.changesAt) < railChangesEvery) {
-		return h.changes
-	}
 	// Whether the branch is due a fetch is decided here, of the rail's
 	// own field, so the read below only sees a copy of it: a fetch asks a
 	// remote, which only the window in front does, and only when the
@@ -1359,20 +1357,30 @@ func (f *frame) railChanges(h *desktop) int {
 	if h == f.active && !due && h.a.git.repo != nil && h.a.git.status != nil && !h.activityAt.IsZero() &&
 		!h.a.git.read.IsZero() && !h.fetchedAt.After(h.a.git.read) {
 		st := h.a.git.status
-		h.changes, h.ahead, h.behind = len(st.Entries), st.Ahead, st.Behind
-		h.hasRepo, h.repoDir, h.repoAt = true, dir, time.Now()
-		h.changesAt = time.Now()
-		if len(st.Entries) == 0 {
-			h.added, h.deleted, h.linesAt = 0, 0, h.changesAt
-		} else if h.a.git.workStat != nil {
-			added, deleted := 0, 0
-			for _, fs := range h.a.git.workStat {
-				added += fs.Added
-				deleted += fs.Deleted
+		staleActive := h.changes != len(st.Entries) || h.ahead != st.Ahead || h.behind != st.Behind
+		if opened || staleActive || time.Since(h.changesAt) >= railChangesEvery {
+			h.changes, h.ahead, h.behind = len(st.Entries), st.Ahead, st.Behind
+			h.hasRepo, h.repoDir, h.repoAt = true, dir, time.Now()
+			h.changesAt = time.Now()
+			if h.changesBusy {
+				h.changesBusy = false
+				h.changesGen++
 			}
-			h.added, h.deleted, h.linesAt = added, deleted, h.changesAt
+			if len(st.Entries) == 0 {
+				h.added, h.deleted, h.linesAt = 0, 0, h.changesAt
+			} else if h.a.git.workStat != nil {
+				added, deleted := 0, 0
+				for _, fs := range h.a.git.workStat {
+					added += fs.Added
+					deleted += fs.Deleted
+				}
+				h.added, h.deleted, h.linesAt = added, deleted, h.changesAt
+			}
+			f.scheduleRailTick()
 		}
-		f.scheduleRailTick()
+		return h.changes
+	}
+	if h.changesBusy || (!opened && time.Since(h.changesAt) < railChangesEvery) {
 		return h.changes
 	}
 	// The lines a work tree gained and lost cost a diff of every change,
@@ -1526,7 +1534,6 @@ func (f *frame) railTab(c *ui.Context, a *app, h *desktop, i int, label string) 
 	if !calm && len(work.blocked) > 0 && time.Since(work.blockedSince) < pulseFor {
 		pulse = work.blockedSince
 	}
-	f.railChanges(h)
 	col := avatarColor(p, dir)
 	if k, ok := railColor(p, style.Color); ok {
 		col = k
